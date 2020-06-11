@@ -187,6 +187,13 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		analytics.flutterSdkVersion = sdks.flutterVersion;
 	}
 
+	// Add the PATHs to the Terminal environment so if the user runs commands
+	// there they match the versions (and can be resolved, if not already on PATH).
+	let envPathPrefix = `${sdks.dart}${path.delimiter}`;
+	if (sdks.flutter)
+		envPathPrefix += `${sdks.flutter}${path.delimiter}`;
+	context.environmentVariableCollection.prepend("PATH", envPathPrefix);
+
 	if (config.previewLsp || process.env.DART_CODE_FORCE_LSP) {
 		isUsingLsp = true;
 	}
