@@ -30,12 +30,17 @@ export abstract class Analyzer implements IAmDisposable {
 	}
 
 	private async setup(): Promise<void> {
+		console.log(`WAITING FOR READY`);
 		await this.onReady;
+		console.log(`WAITING FOR READY Done!`);
 		this.onAnalysisStatusChange.listen((status) => {
 			this.isAnalyzing = status.isAnalyzing;
+			console.log(`STATUS: ${this.isAnalyzing}`);
 			if (!status.isAnalyzing) {
+				console.log(`STATUS: Resolving + setting new promise`);
 				this.onAnalysisCompleteCompleter.resolve();
 				this.onAnalysisCompleteCompleter = new PromiseCompleter<void>();
+				console.log(`STATUS: Resolving + setting new promise DONE!`);
 			}
 		});
 	}
