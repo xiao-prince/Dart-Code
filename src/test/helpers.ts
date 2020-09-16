@@ -148,44 +148,21 @@ function getDefaultFile(): vs.Uri {
 }
 
 
-export function attachLoggingWhenExtensionAvailable(attempt = 1) {
+export function attachLoggingWhenExtensionAvailable() {
 	if (logger && !(logger instanceof BufferedLogger)) {
 		console.warn("Logging was already set up!");
 		return;
 	}
 
-	if (setupTestLogging()) {
-		// console.log("Logging was configured!");
-		return;
-	}
-
-	if (attempt < 50) {
-		setTimeout(() => attachLoggingWhenExtensionAvailable(attempt + 1), 100);
-	} else {
-		console.warn(`Failed to set up logging after ${attempt} attempts`);
-	}
+	setupTestLogging();
 }
 
-function setupTestLogging(): boolean {
-	const ext = vs.extensions.getExtension(dartCodeExtensionIdentifier)!;
-	if (!ext.isActive || !ext.exports)
-		return false;
-
-	extApi = ext.exports[internalApiSymbol];
-	const emittingLogger = extApi.logger;
-
-	if (fileSafeCurrentTestName) {
-		deferUntilLast(async (testResult?: "passed" | "failed") => {
-			console.log('### 1');
-			await delay(1000);
-		});
-	}
-
-	if (logger && logger instanceof BufferedLogger)
-		logger.flushTo(emittingLogger);
-	logger = emittingLogger;
-
-	return true;
+function setupTestLogging() {
+	deferUntilLast(async (testResult?: "passed" | "failed") => {
+		console.log('### 1');
+		await delay(1000);
+		console.log('### /1');
+	});
 }
 
 export async function getPackages(uri?: vs.Uri) {
