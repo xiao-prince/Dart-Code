@@ -149,7 +149,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	const extensionStartTime = new Date();
 	util.logTime();
 	const sdkUtils = new SdkUtils(logger);
-	const isUsingLsp = !!(config.previewLsp || process.env.DART_CODE_FORCE_LSP);
+	const isUsingLsp = false;
 	const workspaceContextUnverified = await sdkUtils.scanWorkspace(isUsingLsp);
 	util.logTime("initWorkspace");
 
