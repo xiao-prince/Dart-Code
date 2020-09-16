@@ -12,7 +12,6 @@ import { Context } from "../../shared/vscode/workspace";
 import { config } from "../config";
 import { ServiceExtensionArgs, timeDilationNormal, timeDilationSlow, VmServiceExtensions } from "../flutter/vm_service_extensions";
 import { PubGlobal } from "../pub/global";
-import { DevToolsManager } from "../sdk/dev_tools/manager";
 import { isValidEntryFile } from "../utils";
 import { DartDebugSessionInformation, ProgressMessage } from "../utils/vscode/debug";
 
@@ -52,12 +51,9 @@ export class DebugCommands {
 	private onDebugSessionVmServiceAvailableEmitter = new vs.EventEmitter<DartDebugSessionInformation>();
 	public readonly onDebugSessionVmServiceAvailable = this.onDebugSessionVmServiceAvailableEmitter.event;
 	public readonly vmServices: VmServiceExtensions;
-	private readonly devTools: DevToolsManager;
 
 	constructor(private readonly logger: Logger, private context: Context, workspaceContext: DartWorkspaceContext, pubGlobal: PubGlobal) {
 		this.vmServices = new VmServiceExtensions(logger, this.sendServiceSetting);
-		this.devTools = new DevToolsManager(logger, workspaceContext, this, pubGlobal);
-		context.subscriptions.push(this.devTools);
 		context.subscriptions.push(this.debugOptions);
 		context.subscriptions.push(this.debugMetrics);
 
@@ -112,32 +108,6 @@ export class DebugCommands {
 				return vs.commands.executeCommand("dart.openDevTools", options);
 			}));
 		});
-		context.subscriptions.push(vs.commands.registerCommand("dart.openDevTools", async (options?: { debugSessionId?: string, triggeredAutomatically?: boolean, page?: string }): Promise<{ url: string, dispose: () => void } | undefined> => {
-			if (!debugSessions.length) {
-				vs.window.showInformationMessage("You must have an active debug session to start DevTools.");
-				return;
-			}
-			const session = options && options.debugSessionId
-				? debugSessions.find((s) => s.session.id === options.debugSessionId)
-				: debugSessions.length === 1
-					? debugSessions[0]
-					: await this.promptForDebugSession();
-			if (!session)
-				return; // User cancelled or specified session was gone
-
-			// Only show a notification if we were not triggered automatically.
-			const notify = !options || options.triggeredAutomatically !== true;
-			const reuseWindows = config.devToolsReuseWindows;
-			const page = options?.page;
-
-			if (session.vmServiceUri) {
-				return this.devTools.spawnForSession(session as DartDebugSessionInformation & { vmServiceUri: string }, { embed: config.embedDevTools, reuseWindows, notify, page });
-			} else if (session.session.configuration.noDebug) {
-				vs.window.showInformationMessage("You must start your app with debugging in order to use DevTools.");
-			} else {
-				vs.window.showInformationMessage("This debug session is not ready yet.");
-			}
-		}));
 
 		// Misc custom debug commands.
 		context.subscriptions.push(vs.commands.registerCommand("_flutter.hotReload.touchBar", (args: any) => vs.commands.executeCommand("flutter.hotReload", args)));

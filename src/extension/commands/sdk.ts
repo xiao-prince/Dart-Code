@@ -10,20 +10,15 @@ import { CustomScript, DartSdks, DartWorkspaceContext, Logger, SpawnedProcess, S
 import { logProcess } from "../../shared/logging";
 import { notUndefined, PromiseCompleter, uniq, usingCustomScript } from "../../shared/utils";
 import { sortBy } from "../../shared/utils/array";
-import { stripMarkdown } from "../../shared/utils/dartdocs";
 import { findProjectFolders, fsPath, mkDirRecursive } from "../../shared/utils/fs";
 import { writeDartSdkSettingIntoProject, writeFlutterSdkSettingIntoProject } from "../../shared/utils/projects";
 import { FlutterDeviceManager } from "../../shared/vscode/device_manager";
-import { createFlutterSampleInTempFolder } from "../../shared/vscode/flutter_samples";
-import { FlutterSampleSnippet } from "../../shared/vscode/interfaces";
 import { getDartWorkspaceFolders } from "../../shared/vscode/utils";
 import { config } from "../config";
 import { locateBestProjectRoot } from "../project";
 import { PubGlobal } from "../pub/global";
 import { isPubGetProbablyRequired, promptToRunPubGet } from "../pub/pub";
 import { Stagehand } from "../pub/stagehand";
-import { getFlutterSnippets } from "../sdk/flutter_docs_snippets";
-import { DartSdkManager, FlutterSdkManager } from "../sdk/sdk_manager";
 import { SdkUtils } from "../sdk/utils";
 import * as util from "../utils";
 import { getGlobalFlutterArgs, safeToolSpawn } from "../utils/processes";
@@ -43,12 +38,6 @@ export class SdkCommands {
 
 	constructor(private readonly logger: Logger, private readonly context: vs.ExtensionContext, private readonly workspace: DartWorkspaceContext, private readonly sdkUtils: SdkUtils, private readonly pubGlobal: PubGlobal, private readonly flutterCapabilities: FlutterCapabilities, private readonly deviceManager: FlutterDeviceManager) {
 		this.sdks = workspace.sdks;
-		const dartSdkManager = new DartSdkManager(this.logger, this.workspace.sdks);
-		context.subscriptions.push(vs.commands.registerCommand("dart.changeSdk", () => dartSdkManager.changeSdk()));
-		if (workspace.hasAnyFlutterProjects) {
-			const flutterSdkManager = new FlutterSdkManager(this.logger, workspace.sdks);
-			context.subscriptions.push(vs.commands.registerCommand("dart.changeFlutterSdk", () => flutterSdkManager.changeSdk()));
-		}
 		context.subscriptions.push(vs.commands.registerCommand("dart.getPackages", this.getPackages, this));
 		context.subscriptions.push(vs.commands.registerCommand("dart.listOutdatedPackages", this.listOutdatedPackages, this));
 		context.subscriptions.push(vs.commands.registerCommand("dart.upgradePackages", this.upgradePackages, this));
@@ -80,7 +69,6 @@ export class SdkCommands {
 		context.subscriptions.push(vs.commands.registerCommand("flutter.doctor", this.flutterDoctor, this));
 		context.subscriptions.push(vs.commands.registerCommand("flutter.upgrade", this.flutterUpgrade, this));
 		context.subscriptions.push(vs.commands.registerCommand("flutter.createProject", this.createFlutterProject, this));
-		context.subscriptions.push(vs.commands.registerCommand("_dart.flutter.createSampleProject", this.createFlutterSampleProject, this));
 		context.subscriptions.push(vs.commands.registerCommand("dart.createProject", this.createDartProject, this));
 		context.subscriptions.push(vs.commands.registerCommand("_dart.create", this.dartCreate, this));
 		context.subscriptions.push(vs.commands.registerCommand("_flutter.create", this.flutterCreate, this));
@@ -641,40 +629,6 @@ export class SdkCommands {
 		vs.commands.executeCommand("vscode.openFolder", projectFolderUri, openInNewWindow);
 	}
 
-	private async createFlutterSampleProject(): Promise<vs.Uri | undefined> {
-		if (!this.sdks || !this.sdks.flutter) {
-			this.sdkUtils.showFlutterActivationFailure("_dart.flutter.createSampleProject");
-			return;
-		}
-
-		// Fetch the JSON for the available samples.
-		let snippets: FlutterSampleSnippet[];
-		try {
-			snippets = await getFlutterSnippets(this.logger, this.sdks, this.flutterCapabilities);
-		} catch {
-			vs.window.showErrorMessage("Unable to retrieve Flutter documentation snippets");
-			return;
-		}
-
-		const sortedSnippets = sortBy(snippets, (s) => s.element);
-
-		const selectedSnippet = await vs.window.showQuickPick(
-			sortedSnippets.map((s) => ({
-				description: `${s.package}/${s.library}`,
-				detail: stripMarkdown(s.description),
-				label: s.element,
-				snippet: s,
-			})),
-			{
-				matchOnDescription: true,
-				placeHolder: "Which Flutter sample?",
-			},
-		);
-		if (!selectedSnippet)
-			return;
-
-		return createFlutterSampleInTempFolder(this.flutterCapabilities, selectedSnippet.snippet.id, config.workspaceFlutterSdkPath);
-	}
 
 	private validateDartProjectName(input: string) {
 		if (!packageNameRegex.test(input))
