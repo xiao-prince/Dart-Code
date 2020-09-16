@@ -72,13 +72,11 @@ export interface InternalExtensionApi {
 		webSupportsEvaluation: boolean;
 		webSupportsHotReload: boolean;
 	};
-	flutterOutlineTreeProvider: TreeDataProvider<TreeItem> | undefined;
 	getLogHeader: () => string;
 	initialAnalysis: Promise<void>;
 	logger: EmittingLogger;
 	analyzer: Analyzer;
 	nextAnalysis: () => Promise<void>;
-	packagesTreeProvider: TreeDataProvider<TreeItem>;
 	pubGlobal: {
 		promptToInstallIfRequired(packageName: string, packageID: string, moreInfoLink?: string, requiredVersion?: string, customActivateScript?: CustomScript, autoUpdate?: boolean): Promise<string | undefined>;
 		checkVersionStatus(packageID: string, installedVersion: string | undefined, requiredVersion?: string): Promise<VersionStatus>;
@@ -87,7 +85,6 @@ export interface InternalExtensionApi {
 	};
 	renameProvider: RenameProvider | undefined;
 	safeToolSpawn: (workingDirectory: string | undefined, binPath: string, args: string[], envOverrides?: { [key: string]: string | undefined }) => SpawnedProcess;
-	testTreeProvider: TestResultsProvider;
 	webClient: WebClient;
 	workspaceContext: WorkspaceContext;
 }

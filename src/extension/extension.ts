@@ -6,7 +6,7 @@ import { DaemonCapabilities, FlutterCapabilities } from "../shared/capabilities/
 import { dartPlatformName, flutterExtensionIdentifier, HAS_LAST_DEBUG_CONFIG, HAS_LAST_TEST_DEBUG_CONFIG, isWin, IS_LSP_CONTEXT, IS_RUNNING_LOCALLY_CONTEXT, platformDisplayName, PUB_OUTDATED_SUPPORTED_CONTEXT } from "../shared/constants";
 import { LogCategory } from "../shared/enums";
 import { WebClient } from "../shared/fetch";
-import { DartWorkspaceContext, FlutterSdks, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
+import { DartWorkspaceContext, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
 import { captureLogs, EmittingLogger, logToConsole, RingLog } from "../shared/logging";
 import { PubApi } from "../shared/pub/api";
 import { internalApiSymbol } from "../shared/symbols";
@@ -26,18 +26,11 @@ import { FileChangeHandler } from "./analysis/file_change_handler";
 import { FileChangeWarnings } from "./analysis/file_change_warnings";
 import { Analytics } from "./analytics";
 import { DartExtensionApi } from "./api";
-import { FlutterDartPadSamplesCodeLensProvider } from "./code_lens/flutter_dartpad_samples";
-import { LspFlutterDartPadSamplesCodeLensProvider } from "./code_lens/flutter_dartpad_samples_lsp";
-import { MainCodeLensProvider } from "./code_lens/main_code_lens_provider";
-import { LspMainCodeLensProvider } from "./code_lens/main_code_lens_provider_lsp";
-import { TestCodeLensProvider } from "./code_lens/test_code_lens_provider";
-import { LspTestCodeLensProvider } from "./code_lens/test_code_lens_provider_lsp";
 import { AnalyzerCommands } from "./commands/analyzer";
 import { DebugCommands, debugSessions } from "./commands/debug";
 import { EditCommands } from "./commands/edit";
 import { DasEditCommands } from "./commands/edit_das";
 import { LspEditCommands } from "./commands/edit_lsp";
-import { FlutterOutlineCommands } from "./commands/flutter_outline";
 import { GoToSuperCommand } from "./commands/go_to_super";
 import { LoggingCommands } from "./commands/logging";
 import { OpenInOtherEditorCommands } from "./commands/open_in_other_editors";
@@ -46,18 +39,10 @@ import { SdkCommands } from "./commands/sdk";
 import { cursorIsInTest, DasTestCommands, isInImplementationFileThatCanHaveTest, isInTestFileThatHasImplementation, LspTestCommands } from "./commands/test";
 import { TypeHierarchyCommand } from "./commands/type_hierarchy";
 import { config } from "./config";
-import { ClosingLabelsDecorations } from "./decorations/closing_labels_decorations";
-import { FlutterColorDecorations } from "./decorations/flutter_color_decorations";
-import { FlutterIconDecorationsDas } from "./decorations/flutter_icon_decorations_das";
-import { FlutterIconDecorationsLsp } from "./decorations/flutter_icon_decorations_lsp";
-import { FlutterUiGuideDecorationsDas } from "./decorations/flutter_ui_guides_decorations_das";
-import { FlutterUiGuideDecorationsLsp } from "./decorations/flutter_ui_guides_decorations_lsp";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
-import { DasFlutterOutlineProvider, FlutterOutlineProvider, LspFlutterOutlineProvider } from "./flutter/flutter_outline_view";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
 import { LspAnalyzerStatusReporter } from "./lsp/analyzer_status_reporter";
-import { LspClosingLabelsDecorations } from "./lsp/closing_labels_decorations";
 import { LspGoToSuperCommand } from "./lsp/go_to_super";
 import { AssistCodeActionProvider } from "./providers/assist_code_action_provider";
 import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
@@ -91,8 +76,6 @@ import { showUserPrompts } from "./user_prompts";
 import * as util from "./utils";
 import { addToLogHeader, clearLogHeader, getExtensionLogPath, getLogHeader } from "./utils/log";
 import { safeToolSpawn } from "./utils/processes";
-import { DartPackagesProvider } from "./views/packages_view";
-import { TestItemTreeItem, TestResultsProvider } from "./views/test_view";
 
 const DART_MODE = { language: "dart", scheme: "file" };
 const HTML_MODE = { language: "html", scheme: "file" };
@@ -236,8 +219,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Set up providers.
 	// TODO: Do we need to push all these to subscriptions?!
 
-	if (lspClient)
-		context.subscriptions.push(new LspClosingLabelsDecorations(lspClient));
 
 	const completionItemProvider = isUsingLsp || !dasClient ? undefined : new DartCompletionItemProvider(logger, dasClient);
 	const referenceProvider = isUsingLsp || !dasClient ? undefined : new DartReferenceProvider(dasClient);
@@ -291,39 +272,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		// Dart only.
 		context.subscriptions.push(vs.languages.registerCodeActionsProvider(DART_MODE, new SourceCodeActionProvider(), SourceCodeActionProvider.metadata));
 		context.subscriptions.push(vs.languages.registerImplementationProvider(DART_MODE, new DartImplementationProvider(dasAnalyzer)));
-
-		if (config.showMainCodeLens) {
-			const codeLensProvider = new MainCodeLensProvider(logger, dasAnalyzer);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
-		if (config.showTestCodeLens) {
-			const codeLensProvider = new TestCodeLensProvider(logger, dasAnalyzer);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
-		if (config.showDartPadSampleCodeLens && sdks.flutter) {
-			const codeLensProvider = new FlutterDartPadSamplesCodeLensProvider(logger, dasAnalyzer, sdks as FlutterSdks);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
-	}
-	if (isUsingLsp && lspClient && lspAnalyzer) {
-		if (config.showMainCodeLens) {
-			const codeLensProvider = new LspMainCodeLensProvider(logger, lspAnalyzer);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
-		if (config.showTestCodeLens) {
-			const codeLensProvider = new LspTestCodeLensProvider(logger, lspAnalyzer);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
-		if (config.showDartPadSampleCodeLens && sdks.flutter) {
-			const codeLensProvider = new LspFlutterDartPadSamplesCodeLensProvider(logger, lspAnalyzer, sdks as FlutterSdks);
-			context.subscriptions.push(codeLensProvider);
-			context.subscriptions.push(vs.languages.registerCodeLensProvider(DART_MODE, codeLensProvider));
-		}
 	}
 
 	rankingCodeActionProvider.registerProvider(new IgnoreLintCodeActionProvider(activeFileFilters));
@@ -412,25 +360,13 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	context.subscriptions.push(vs.debug.registerDebugConfigurationProvider("dart", new InitialLaunchJsonDebugConfigProvider(), vs.DebugConfigurationProviderTriggerKind.Initial));
 	context.subscriptions.push(vs.debug.registerDebugConfigurationProvider("dart", new DynamicDebugConfigProvider(), vs.DebugConfigurationProviderTriggerKind.Dynamic));
 
-	if (config.flutterGutterIcons)
-		context.subscriptions.push(new FlutterColorDecorations(logger, path.join(context.globalStoragePath, "flutterColors")));
 
 	if (!isUsingLsp && dasClient && dasAnalyzer) {
-		if (config.previewFlutterUiGuides)
-			context.subscriptions.push(new FlutterUiGuideDecorationsDas(dasAnalyzer));
-
-		if (config.flutterGutterIcons)
-			context.subscriptions.push(new FlutterIconDecorationsDas(logger, dasAnalyzer));
-
 		// Setup that requires server version/capabilities.
 		const connectedSetup = dasClient.registerForServerConnected(async (sc) => {
 			connectedSetup.dispose();
 
 			context.subscriptions.push(new RefactorCommands(logger, context, dasClient));
-
-			if (dasClient.capabilities.supportsClosingLabels && config.closingLabels) {
-				context.subscriptions.push(new ClosingLabelsDecorations(dasClient));
-			}
 
 			if (dasClient.capabilities.supportsGetDeclerations) {
 				context.subscriptions.push(vs.languages.registerWorkspaceSymbolProvider(new DartWorkspaceSymbolProvider(logger, dasClient)));
@@ -460,12 +396,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 				});
 			}
 		});
-	} else if (isUsingLsp && lspClient && lspAnalyzer) {
-		if (config.previewFlutterUiGuides)
-			context.subscriptions.push(new FlutterUiGuideDecorationsLsp(lspAnalyzer));
-
-		if (config.flutterGutterIcons)
-			context.subscriptions.push(new FlutterIconDecorationsLsp(logger, lspAnalyzer));
 	}
 
 	// Handle config changes so we can reanalyze if necessary.
@@ -506,53 +436,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		context.subscriptions.push(new LspEditCommands(lspAnalyzer));
 	}
 
-	// Register our view providers.
-	const dartPackagesProvider = new DartPackagesProvider(logger);
-	const packagesTreeView = vs.window.createTreeView("dartPackages", { treeDataProvider: dartPackagesProvider });
-	context.subscriptions.push(
-		dartPackagesProvider,
-		packagesTreeView,
-	);
-	const testTreeProvider = new TestResultsProvider(logger);
-	const testTreeView = vs.window.createTreeView("dartTestTree", { treeDataProvider: testTreeProvider });
-	context.subscriptions.push(
-		testTreeProvider,
-		testTreeView,
-		testTreeProvider.onDidStartTests((node) => {
-			if (config.openTestViewOnStart)
-				testTreeView.reveal(node);
-		}),
-		testTreeProvider.onFirstFailure((node) => {
-			if (config.openTestViewOnFailure)
-				testTreeView.reveal(node);
-		}),
-		testTreeView.onDidChangeSelection((e) => {
-			testTreeProvider.setSelectedNodes(e.selection && e.selection.length === 1 ? e.selection[0] as TestItemTreeItem : undefined);
-		}),
-	);
-	let flutterOutlineTreeProvider: FlutterOutlineProvider | undefined;
-	if (config.flutterOutline) {
-		// TODO: Extract this out - it's become messy since TreeView was added in.
-
-		flutterOutlineTreeProvider = dasAnalyzer ? new DasFlutterOutlineProvider(dasAnalyzer) : new LspFlutterOutlineProvider(lspAnalyzer!);
-		const tree = vs.window.createTreeView("dartFlutterOutline", { treeDataProvider: flutterOutlineTreeProvider, showCollapseAll: true });
-		tree.onDidChangeSelection(async (e) => {
-			// TODO: This should be in a tree, not the data provider.
-			await flutterOutlineTreeProvider!.setContexts(e.selection);
-		});
-
-		context.subscriptions.push(vs.window.onDidChangeTextEditorSelection((e) => {
-			if (e.selections && e.selections.length) {
-				const node = flutterOutlineTreeProvider!.getNodeAt(e.textEditor.document.uri, e.selections[0].start);
-				if (node && tree.visible)
-					tree.reveal(node, { select: true, focus: false, expand: true });
-			}
-		}));
-		context.subscriptions.push(tree);
-		context.subscriptions.push(flutterOutlineTreeProvider);
-		// TODO: This doesn't work for LSP!!!
-		const flutterOutlineCommands = new FlutterOutlineCommands(tree, context);
-	}
 
 	context.subscriptions.push(vs.commands.registerCommand("dart.package.openFile", (filePath) => {
 		if (!filePath) return;
@@ -627,7 +510,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			return;
 		}
 
-		dartPackagesProvider.refresh();
 		recalculateAnalysisRoots();
 		checkForPackages();
 	}));
@@ -649,7 +531,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			envUtils,
 			fileTracker: dasAnalyzer ? dasAnalyzer.fileTracker : (lspAnalyzer ? lspAnalyzer.fileTracker : undefined),
 			flutterCapabilities,
-			flutterOutlineTreeProvider,
 			get cursorIsInTest() { return cursorIsInTest; },
 			get isInImplementationFileThatCanHaveTest() { return isInImplementationFileThatCanHaveTest; },
 			get isInTestFileThatHasImplementation() { return isInTestFileThatHasImplementation; },
@@ -658,11 +539,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			isLsp: isUsingLsp,
 			logger,
 			nextAnalysis: () => analyzer.onNextAnalysisComplete,
-			packagesTreeProvider: dartPackagesProvider,
 			pubGlobal,
 			renameProvider,
 			safeToolSpawn,
-			testTreeProvider,
 			webClient,
 			workspaceContext,
 		} as InternalExtensionApi,
