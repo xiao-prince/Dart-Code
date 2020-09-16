@@ -189,17 +189,8 @@ function setupTestLogging(): boolean {
 		const testLogger = captureLogs(emittingLogger, logPath, extApi.getLogHeader(), 20000, excludeLogCategories, true);
 
 		deferUntilLast(async (testResult?: "passed" | "failed") => {
-			// Put a new buffered logger back to capture any logging output happening
-			// after we closed our log file to be included in the next.
 			console.log('### 1');
-			logger = new BufferedLogger();
-			console.log('### 2');
-
-			// Wait a little before closing, to ensure we capture anything in-progress.
 			await delay(1000);
-			console.log('### 3');
-			// await testLogger.dispose();
-			console.log('### 4');
 		});
 	}
 
