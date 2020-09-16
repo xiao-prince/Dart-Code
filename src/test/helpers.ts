@@ -255,7 +255,10 @@ export async function getPackages(uri?: vs.Uri) {
 		extApi = ext.exports[internalApiSymbol];
 	}
 	console.log('WAITING FOR PACKAGES333');
-	await waitForNextAnalysis();
+	logger.info("Waiting for any in-progress analysis to complete");
+	const nextAnalysis = extApi.nextAnalysis();
+	logger.info(`Waiting for analysis to complete`);
+	await nextAnalysis;
 	console.log('WAITING FOR PACKAGES666');
 }
 
@@ -835,12 +838,6 @@ export async function waitForEditorChange(action: () => Thenable<void>): Promise
 	await delay(1);
 }
 
-export async function waitForNextAnalysis(): Promise<void> {
-	logger.info("Waiting for any in-progress analysis to complete");
-	const nextAnalysis = extApi.nextAnalysis();
-	logger.info(`Waiting for analysis to complete`);
-	await nextAnalysis;
-}
 
 export async function withTimeout<T>(promise: Thenable<T>, message: string | (() => string), seconds: number = 360): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
