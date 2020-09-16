@@ -9,8 +9,8 @@ import { LogCategory } from "../shared/enums";
 import { Logger } from "../shared/interfaces";
 import { captureLogs } from "../shared/logging";
 import { internalApiSymbol } from "../shared/symbols";
-import { BufferedLogger, escapeRegExp, filenameSafe, flatMap } from "../shared/utils";
-import { fsPath, tryDeleteFile } from "../shared/utils/fs";
+import { BufferedLogger, filenameSafe, flatMap } from "../shared/utils";
+import { fsPath } from "../shared/utils/fs";
 import { resolvedPromise, waitFor } from "../shared/utils/promises";
 import { InternalExtensionApi } from "../shared/vscode/interfaces";
 import { SourceSortMembersCodeActionKind } from "../shared/vscode/utils";
@@ -148,15 +148,6 @@ function getDefaultFile(): vs.Uri {
 		return emptyFile;
 }
 
-export async function activateWithoutAnalysis(): Promise<void> {
-	// TODO: Should we do this, or should we just check that it has been activated?
-	await ext.activate();
-	if (ext.exports) {
-		extApi = ext.exports[internalApiSymbol];
-		setupTestLogging();
-	} else
-		console.warn("Extension has no exports, it probably has not activated correctly! Check the extension startup logs.");
-}
 
 export function attachLoggingWhenExtensionAvailable(attempt = 1) {
 	if (logger && !(logger instanceof BufferedLogger)) {
@@ -221,34 +212,14 @@ function setupTestLogging(): boolean {
 	return true;
 }
 
-export async function activate(file?: vs.Uri | null | undefined): Promise<void> {
-	await activateWithoutAnalysis();
-	if (file === undefined) // undefined means use default, but explicit null will result in no file open.
-		file = getDefaultFile();
-
-	await closeAllOpenFiles();
-	if (file) {
-		await openFile(file);
-	} else {
-		logger.info(`Not opening any file`);
-	}
-	logger.info(`Waiting for initial analysis`);
-	await extApi.initialAnalysis;
-	// Opening a file above may start analysis after a short period so give it time to start
-	// before we continue.
-	await delay(200);
-	logger.info(`Waiting for in-progress analysis`);
-	await extApi.currentAnalysis();
-
-	logger.info(`Cancelling any in-progress requests`);
-	extApi.cancelAllAnalysisRequests();
-
-	logger.info(`Ready to start test`);
-}
-
 export async function getPackages(uri?: vs.Uri) {
 	console.log('WAITING FOR PACKAGES');
-	await activateWithoutAnalysis();
+	// TODO: Should we do this, or should we just check that it has been activated?
+	await ext.activate();
+
+	extApi = ext.exports[internalApiSymbol];
+	setupTestLogging();
+
 	console.log('WAITING FOR PACKAGES222');
 	// await ext.activate();
 	if (ext.exports) {
@@ -260,72 +231,6 @@ export async function getPackages(uri?: vs.Uri) {
 	logger.info(`Waiting for analysis to complete`);
 	await nextAnalysis;
 	console.log('WAITING FOR PACKAGES666');
-}
-
-function logOpenEditors() {
-	logger.info(`Current open editors are:`);
-	if (vs.window.visibleTextEditors && vs.window.visibleTextEditors.length) {
-		for (const editor of vs.window.visibleTextEditors) {
-			logger.info(`  - ${editor.document.uri}`);
-		}
-	} else {
-		logger.info(`  - (no open editors)`);
-	}
-}
-
-export function captureOutput(name: string) {
-	// Create a channel that buffers its output.
-	const buffer: string[] = [];
-	const channel = vs.window.createOutputChannel(name);
-
-	sb.stub(channel, "append").callsFake((s: string) => buffer.push(s));
-	sb.stub(channel, "appendLine").callsFake((s: string) => buffer.push(`${s}\n`));
-
-	// Ensure calls to create this output channel return our stubbed output channel.
-	const createOutputChannel = sb.stub(vs.window, "createOutputChannel").callThrough();
-	createOutputChannel.withArgs(sinon.match(new RegExp(`^${escapeRegExp(name)}`))).returns(channel);
-
-	return {
-		buffer,
-		channel,
-	};
-}
-
-export async function closeAllOpenFiles(): Promise<void> {
-	logger.info(`Closing all open editors...`);
-	logOpenEditors();
-	try {
-		await withTimeout(
-			vs.commands.executeCommand("workbench.action.closeAllEditors"),
-			"closeAllEditors all editors did not complete",
-			10,
-		);
-	} catch (e) {
-		logger.warn(e);
-	}
-	await delay(100);
-	logger.info(`Done closing editors!`);
-	logOpenEditors();
-}
-
-export async function waitUntilAllTextDocumentsAreClosed(): Promise<void> {
-	logger.info(`Waiting for VS Code to mark all documents as closed...`);
-	const getAllOpenDocs = () => vs.workspace.textDocuments.filter((td) => !td.isUntitled && td.uri.scheme === "file");
-	await waitForResult(() => getAllOpenDocs().length === 0, "Some TextDocuments did not close", threeMinutesInMilliseconds, false);
-	const openDocs = getAllOpenDocs();
-	if (openDocs.length) {
-		throw new Error(`All open files were not closed (for ex: ${fsPath(openDocs[0].uri)})`);
-	}
-}
-
-export async function closeFile(file: vs.Uri): Promise<void> {
-	for (const editor of vs.window.visibleTextEditors) {
-		if (fsPath(editor.document.uri) === fsPath(file)) {
-			console.log(`Closing visible editor ${editor.document.uri}...`);
-			await vs.window.showTextDocument(editor.document);
-			await vs.commands.executeCommand("workbench.action.closeActiveEditor");
-		}
-	}
 }
 
 export async function openFile(file: vs.Uri): Promise<vs.TextEditor> {
@@ -342,27 +247,6 @@ export async function openFile(file: vs.Uri): Promise<vs.TextEditor> {
 	} finally {
 		await delay(100);
 	}
-}
-
-export function tryDelete(file: vs.Uri) {
-	tryDeleteFile(fsPath(file));
-}
-
-export function deleteDirectoryRecursive(folder: string) {
-	if (!fs.existsSync(folder))
-		return;
-	if (!fs.statSync(folder).isDirectory()) {
-		logger.error(`deleteDirectoryRecursive was passed a file: ${folder}`);
-	}
-	fs.readdirSync(folder)
-		.map((item) => path.join(folder, item))
-		.forEach((item) => {
-			if (fs.statSync(item).isDirectory()) {
-				deleteDirectoryRecursive(item);
-			} else
-				fs.unlinkSync(item);
-		});
-	fs.rmdirSync(folder);
 }
 
 export let currentTestName = "unknown";
@@ -392,7 +276,7 @@ afterEach("run deferred functions", async function () {
 	let firstError: any;
 	for (const d of [...deferredItems.reverse(), ...deferredToLastItems.reverse()]) {
 		try {
-			await watchPromise(`afterEach->deferred->${d.toString()}`, d(this.currentTest ? this.currentTest.state : undefined));
+			await d(this.currentTest ? this.currentTest.state : undefined);
 		} catch (e) {
 			logger.error(`Error running deferred function: ${e}`);
 			// TODO: Add names for deferred functions instead...
@@ -855,102 +739,7 @@ export async function withTimeout<T>(promise: Thenable<T>, message: string | (()
 	});
 }
 
-export async function writeBrokenDartCodeIntoFileForTest(file: vs.Uri): Promise<void> {
-	const nextAnalysis = extApi.nextAnalysis();
-	fs.writeFileSync(fsPath(file), "this is broken dart code");
-	await nextAnalysis;
-	// HACK: Sometimes we see analysis the analysis flag toggle quickly and we get an empty error list
-	// so we need to add a small delay here and then wait for any in progress analysis.
-	await delay(500);
-	await extApi.currentAnalysis();
-	defer(() => tryDelete(file));
-}
 
-export function deleteFileIfExists(filePath: string) {
-	if (fs.existsSync(filePath)) {
-		fs.unlinkSync(filePath);
-	}
-}
-
-export function prepareHasRunFile(name: string) {
-	const hasRunFile = path.join(fsPath(flutterBazelRoot), `scripts/has_run/${name}`);
-	deleteFileIfExists(hasRunFile);
-	return hasRunFile;
-}
-
-export function ensureHasRunRecently(name: string, allowedModificationSeconds = 60) {
-	const hasRunFile = path.isAbsolute(name)
-		? name
-		: path.join(fsPath(flutterBazelRoot), `scripts/has_run/${name}`);
-	assert.ok(fs.existsSync(hasRunFile));
-	const lastModified = fs.statSync(hasRunFile).mtime;
-	const modifiedSecondsAgo = (Date.now() - lastModified.getTime()) / 1000;
-	assert.ok(modifiedSecondsAgo < allowedModificationSeconds, `File hasn't been modified for ${modifiedSecondsAgo} seconds`);
-}
-
-export async function saveTrivialChangeToFile(uri: vs.Uri) {
-	const editor = await openFile(uri);
-	const doc = editor.document;
-	await setTestContent(doc.getText() + " // test");
-	await doc.save();
-}
-
-export function makeTrivialChangeToFileDirectly(uri: vs.Uri): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const filePath = fsPath(uri);
-		const originalContents = fs.readFileSync(filePath);
-		fs.writeFile(filePath, originalContents + " // test", (error) => {
-			if (error)
-				reject(error);
-			else
-				resolve();
-		});
-	});
-}
-
-// Watches a promise and reports every 10s while it's unresolved. This is to aid tracking
-// down hangs in test runs where multiple promises can be spawned together and generate
-// lots of log output, making it hard to keep track of which did not complete.
-export function watchPromise<T>(name: string, promise: Promise<T>): Promise<T> {
-	// For convenience, this method might get wrapped around things that are not
-	// promises.
-	if (!promise || !promise.then || !promise.catch)
-		return promise;
-	let didComplete = false;
-	// We'll log completion of the promise only if we'd logged that it was still in
-	// progress at some point.
-	let logCompletion = false;
-	// tslint:disable-next-line: no-floating-promises
-	promise.then((_) => {
-		didComplete = true;
-		if (logCompletion)
-			logger.info(`Promise ${name} resolved!`, LogCategory.CI);
-	});
-	promise.catch((_) => {
-		didComplete = true;
-		if (logCompletion)
-			logger.warn(`Promise ${name} rejected!`, LogCategory.CI);
-	});
-
-	const initialCheck = 3000;
-	const subsequentCheck = 10000;
-	const maxTime = 60000;
-	let checkResult: (timeMS: number) => void;
-	checkResult = (timeMS: number) => {
-		if (didComplete)
-			return;
-		logCompletion = true;
-		logger.info(`Promise ${name} is still unresolved!`, LogCategory.CI);
-		if (timeMS > maxTime) {
-			logger.error(`Promise ${name} not resolved after ${maxTime}ms so no longer watching!`, LogCategory.CI);
-			return;
-		}
-		setTimeout(() => checkResult(timeMS + subsequentCheck), subsequentCheck).unref();
-	};
-	setTimeout(() => checkResult(initialCheck), initialCheck).unref(); // First log is after 3s, rest are 10s.
-
-	return promise;
-}
 
 export async function setConfigForTest(section: string, key: string, value: any): Promise<void> {
 	const conf = vs.workspace.getConfiguration(section);
