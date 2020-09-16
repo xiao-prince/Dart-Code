@@ -39,7 +39,6 @@ import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
-import { DartLanguageConfiguration } from "./providers/dart_language_configuration";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
@@ -209,8 +208,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		const provider = new PubBuildRunnerTaskProvider(sdks);
 		context.subscriptions.push(vs.tasks.registerTaskProvider(provider.type, provider));
 	}
-
-	context.subscriptions.push(vs.languages.setLanguageConfiguration(DART_MODE.language, new DartLanguageConfiguration()));
 
 	if (dasClient)
 		// tslint:disable-next-line: no-unused-expression
