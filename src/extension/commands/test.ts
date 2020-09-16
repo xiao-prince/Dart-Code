@@ -6,11 +6,9 @@ import { Logger } from "../../shared/interfaces";
 import { escapeDartString, generateTestNameFromFileName } from "../../shared/utils";
 import { fsPath, mkDirRecursive } from "../../shared/utils/fs";
 import { TestOutlineInfo, TestOutlineVisitor } from "../../shared/utils/outline_das";
-import { LspTestOutlineInfo, LspTestOutlineVisitor } from "../../shared/utils/outline_lsp";
 import { createTestFileAction, defaultTestFileContents, getLaunchConfig } from "../../shared/utils/test";
 import { WorkspaceContext } from "../../shared/workspace";
 import { DasFileTracker } from "../analysis/file_tracker_das";
-import { LspFileTracker } from "../analysis/file_tracker_lsp";
 import { isDartDocument } from "../editors";
 import { isTestFile } from "../utils";
 
@@ -202,42 +200,6 @@ export class DasTestCommands extends TestCommands {
 			end = document.lineAt(end.line).rangeIncludingLineBreak.end;
 
 			return new vs.Range(start, end).contains(editor.selection);
-		});
-	}
-}
-
-export class LspTestCommands extends TestCommands {
-	constructor(logger: Logger, wsContext: WorkspaceContext, private readonly fileTracker: LspFileTracker) {
-		super(logger, wsContext);
-	}
-
-	protected testForCursor(editor: vs.TextEditor): LspTestOutlineInfo | undefined {
-		const document = editor.document;
-		const outline = this.fileTracker.getOutlineFor(document.uri);
-		if (!outline || !outline.children || !outline.children.length)
-			return;
-
-		// We should only allow running for projects we know can actually handle `pub run` (for ex. the
-		// SDK codebase cannot, and will therefore run all tests).
-		if (!this.fileTracker.supportsPubRunTest(document.uri))
-			return;
-
-		const visitor = new LspTestOutlineVisitor(this.logger, fsPath(document.uri));
-		visitor.visit(outline);
-		return visitor.tests.reverse().find((t) => {
-			let start = t.range.start;
-			let end = t.range.end;
-
-			// Widen the range to start/end of lines.
-			start = document.lineAt(start.line).rangeIncludingLineBreak.start;
-			end = document.lineAt(end.line).rangeIncludingLineBreak.end;
-
-			const vsRange = new vs.Range(start.line,
-				start.character,
-				end.line,
-				end.character,
-			);
-			return vsRange.contains(editor.selection);
 		});
 	}
 }

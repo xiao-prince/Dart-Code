@@ -20,7 +20,6 @@ import { envUtils, getDartWorkspaceFolders, isRunningLocally, warnIfPathCaseMism
 import { Context } from "../shared/vscode/workspace";
 import { WorkspaceContext } from "../shared/workspace";
 import { DasAnalyzer } from "./analysis/analyzer_das";
-import { LspAnalyzer } from "./analysis/analyzer_lsp";
 import { AnalyzerStatusReporter } from "./analysis/analyzer_status_reporter";
 import { FileChangeHandler } from "./analysis/file_change_handler";
 import { FileChangeWarnings } from "./analysis/file_change_warnings";
@@ -30,20 +29,17 @@ import { AnalyzerCommands } from "./commands/analyzer";
 import { DebugCommands, debugSessions } from "./commands/debug";
 import { EditCommands } from "./commands/edit";
 import { DasEditCommands } from "./commands/edit_das";
-import { LspEditCommands } from "./commands/edit_lsp";
 import { GoToSuperCommand } from "./commands/go_to_super";
 import { LoggingCommands } from "./commands/logging";
 import { OpenInOtherEditorCommands } from "./commands/open_in_other_editors";
 import { RefactorCommands } from "./commands/refactor";
 import { SdkCommands } from "./commands/sdk";
-import { cursorIsInTest, DasTestCommands, isInImplementationFileThatCanHaveTest, isInTestFileThatHasImplementation, LspTestCommands } from "./commands/test";
+import { cursorIsInTest, DasTestCommands, isInImplementationFileThatCanHaveTest, isInTestFileThatHasImplementation } from "./commands/test";
 import { TypeHierarchyCommand } from "./commands/type_hierarchy";
 import { config } from "./config";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
-import { LspAnalyzerStatusReporter } from "./lsp/analyzer_status_reporter";
-import { LspGoToSuperCommand } from "./lsp/go_to_super";
 import { AssistCodeActionProvider } from "./providers/assist_code_action_provider";
 import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
@@ -188,11 +184,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Fire up the analyzer process.
 	const analyzerStartTime = new Date();
 
-	analyzer = isUsingLsp ? new LspAnalyzer(logger, sdks, dartCapabilities, workspaceContext) : new DasAnalyzer(logger, analytics, sdks, dartCapabilities, workspaceContext);
-	const lspAnalyzer = isUsingLsp ? (analyzer as LspAnalyzer) : undefined;
-	const dasAnalyzer = isUsingLsp ? undefined : (analyzer as DasAnalyzer);
+	analyzer = new DasAnalyzer(logger, analytics, sdks, dartCapabilities, workspaceContext);
+	const dasAnalyzer = analyzer as DasAnalyzer;
 	const dasClient = dasAnalyzer ? dasAnalyzer.client : undefined;
-	const lspClient = dasClient ? undefined : (analyzer as LspAnalyzer).client;
 	context.subscriptions.push(analyzer);
 
 	// tslint:disable-next-line: no-floating-promises
@@ -291,10 +285,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	context.subscriptions.push(vs.languages.setLanguageConfiguration(DART_MODE.language, new DartLanguageConfiguration()));
 
-	// TODO: Push the differences into the Analyzer classes so we can have one reporter.
-	if (lspClient)
-		// tslint:disable-next-line: no-unused-expression
-		new LspAnalyzerStatusReporter(analyzer);
 	if (dasClient)
 		// tslint:disable-next-line: no-unused-expression
 		new AnalyzerStatusReporter(logger, dasClient, workspaceContext, analytics);
@@ -416,15 +406,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	context.subscriptions.push(new OpenInOtherEditorCommands(logger, sdks));
 	if (dasAnalyzer)
 		context.subscriptions.push(new DasTestCommands(logger, workspaceContext, dasAnalyzer.fileTracker));
-	if (lspAnalyzer)
-		context.subscriptions.push(new LspTestCommands(logger, workspaceContext, lspAnalyzer.fileTracker));
 
-	if (lspClient && lspAnalyzer) {
-		// TODO: LSP equivs of the others...
-		// Refactors
-		// TypeHierarchyCommand
-		context.subscriptions.push(new LspGoToSuperCommand(lspAnalyzer));
-	}
 
 	// Set up commands for Dart editors.
 	context.subscriptions.push(new EditCommands());
@@ -432,8 +414,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		context.subscriptions.push(new DasEditCommands(logger, context, dasClient));
 		context.subscriptions.push(new TypeHierarchyCommand(logger, dasClient));
 		context.subscriptions.push(new GoToSuperCommand(dasAnalyzer));
-	} else if (lspClient && lspAnalyzer) {
-		context.subscriptions.push(new LspEditCommands(lspAnalyzer));
 	}
 
 
@@ -529,7 +509,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			debugProvider,
 			debugSessions,
 			envUtils,
-			fileTracker: dasAnalyzer ? dasAnalyzer.fileTracker : (lspAnalyzer ? lspAnalyzer.fileTracker : undefined),
+			fileTracker: dasAnalyzer.fileTracker,
 			flutterCapabilities,
 			get cursorIsInTest() { return cursorIsInTest; },
 			get isInImplementationFileThatCanHaveTest() { return isInImplementationFileThatCanHaveTest; },
