@@ -191,17 +191,15 @@ function setupTestLogging(): boolean {
 		deferUntilLast(async (testResult?: "passed" | "failed") => {
 			// Put a new buffered logger back to capture any logging output happening
 			// after we closed our log file to be included in the next.
+			console.log('### 1');
 			logger = new BufferedLogger();
+			console.log('### 2');
 
 			// Wait a little before closing, to ensure we capture anything in-progress.
 			await delay(1000);
-			await testLogger.dispose();
-			// On CI, we delete logs for passing tests to save money on S3 :-)
-			if (process.env.CI && testResult === "passed") {
-				try {
-					fs.unlinkSync(logPath);
-				} catch { }
-			}
+			console.log('### 3');
+			// await testLogger.dispose();
+			console.log('### 4');
 		});
 	}
 
@@ -275,20 +273,26 @@ const deferredToLastItems: Array<(result?: "failed" | "passed") => Promise<any> 
 afterEach("run deferred functions", async function () {
 	let firstError: any;
 	for (const d of [...deferredItems.reverse(), ...deferredToLastItems.reverse()]) {
+		console.log(`Running deferred...`);
 		try {
 			await d(this.currentTest ? this.currentTest.state : undefined);
 		} catch (e) {
+			console.log('deferred error');
 			logger.error(`Error running deferred function: ${e}`);
 			// TODO: Add names for deferred functions instead...
 			logger.warn(d.toString());
 			firstError = firstError || e;
 		}
+		console.log(`Running deferred done!`);
 	}
 	deferredItems.length = 0;
 	deferredToLastItems.length = 0;
 	// We delay throwing until the end so that other cleanup can run
-	if (firstError)
+	if (firstError) {
+		console.log('rethrowing');
 		throw firstError;
+	}
+	console.log('finished all deferred');
 });
 export function defer(callback: (result?: "failed" | "passed") => Promise<any> | any): void {
 	deferredItems.push(callback);
