@@ -38,6 +38,7 @@ import { config } from "./config";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
+import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
@@ -216,6 +217,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	// Set up diagnostics.
 	if (!isUsingLsp && dasClient) {
+		const diagnostics = vs.languages.createDiagnosticCollection("dart");
+		context.subscriptions.push(diagnostics);
+		const diagnosticsProvider = new DartDiagnosticProvider(dasClient, diagnostics);
 
 		// TODO: Currently calculating analysis roots requires the version to check if
 		// we need the package workaround. In future if we stop supporting server < 1.20.1 we
