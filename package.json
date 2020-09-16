@@ -58,15 +58,7 @@
 				],
 				"aliases": [
 					"Dart"
-				],
-				"configuration": "./syntaxes/dart-language-configuration.json"
-			}
-		],
-		"grammars": [
-			{
-				"language": "dart",
-				"scopeName": "source.dart",
-				"path": "./syntaxes/dart.json"
+				]
 			}
 		],
 		"colors": [
