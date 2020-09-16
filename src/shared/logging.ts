@@ -116,21 +116,6 @@ export function captureLogs(logger: EmittingLogger, file: string, header: string
 		if (!logStream)
 			return;
 
-		// We should log this event if:
-		// - We don't have a category filter; or
-		// - The category filter includes this category; or
-		// - The log is WARN/ERROR (they get logged everywhere).
-		const shouldLog = !logCategories
-			|| (
-				excludeLogCategories
-					? logCategories.indexOf(e.category) === -1
-					: logCategories.indexOf(e.category) !== -1
-			)
-			|| e.severity === LogSeverity.Warn
-			|| e.severity === LogSeverity.Error;
-		if (!shouldLog)
-			return;
-
 		logStream.write(`${e.toLine(maxLogLineLength)}${os.EOL}`);
 	});
 	return {

@@ -4,7 +4,6 @@ import { Analyzer } from "../shared/analyzer";
 import { DartCapabilities } from "../shared/capabilities/dart";
 import { DaemonCapabilities, FlutterCapabilities } from "../shared/capabilities/flutter";
 import { dartPlatformName, flutterExtensionIdentifier, HAS_LAST_DEBUG_CONFIG, HAS_LAST_TEST_DEBUG_CONFIG, isWin, IS_LSP_CONTEXT, IS_RUNNING_LOCALLY_CONTEXT, platformDisplayName, PUB_OUTDATED_SUPPORTED_CONTEXT } from "../shared/constants";
-import { LogCategory } from "../shared/enums";
 import { WebClient } from "../shared/fetch";
 import { DartWorkspaceContext, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
 import { captureLogs, EmittingLogger, logToConsole, RingLog } from "../shared/logging";
@@ -76,7 +75,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	vs.commands.executeCommand("setContext", IS_RUNNING_LOCALLY_CONTEXT, isRunningLocally);
 	buildLogHeaders();
-	setupLog(getExtensionLogPath(), LogCategory.General);
+	setupLog(getExtensionLogPath());
 
 	const extContext = Context.for(context);
 	const webClient = new WebClient(extensionVersion);
@@ -112,9 +111,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	// Create log headers and set up all other log files.
 	buildLogHeaders(logger, workspaceContextUnverified);
-	setupLog(config.analyzerLogFile, LogCategory.Analyzer);
-	setupLog(config.flutterDaemonLogFile, LogCategory.FlutterDaemon);
-	setupLog(config.devToolsLogFile, LogCategory.DevTools);
 
 	if (!workspaceContextUnverified.sdks.dart || (workspaceContextUnverified.hasAnyFlutterProjects && !workspaceContextUnverified.sdks.flutter)) {
 		// Don't set anything else up; we can't work like this!
@@ -355,9 +351,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	};
 }
 
-function setupLog(logFile: string | undefined, category: LogCategory) {
+function setupLog(logFile: string | undefined) {
 	if (logFile)
-		loggers.push(captureLogs(logger, logFile, getLogHeader(), config.maxLogLineLength, [category]));
+		loggers.push(captureLogs(logger, logFile, getLogHeader(), config.maxLogLineLength));
 }
 
 function buildLogHeaders(logger?: Logger, workspaceContext?: WorkspaceContext) {
