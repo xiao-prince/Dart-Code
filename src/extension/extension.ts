@@ -38,7 +38,20 @@ import { config } from "./config";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
+import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
+import { DartDocumentSymbolProvider } from "./providers/dart_document_symbol_provider";
+import { DartFoldingProvider } from "./providers/dart_folding_provider";
+import { DartFormattingEditProvider } from "./providers/dart_formatting_edit_provider";
+import { DartDocumentHighlightProvider } from "./providers/dart_highlighting_provider";
+import { DartHoverProvider } from "./providers/dart_hover_provider";
+import { DartImplementationProvider } from "./providers/dart_implementation_provider";
+import { DartLanguageConfiguration } from "./providers/dart_language_configuration";
+import { DartReferenceProvider } from "./providers/dart_reference_provider";
+import { DartRenameProvider } from "./providers/dart_rename_provider";
+import { DartSignatureHelpProvider } from "./providers/dart_signature_help_provider";
+import { DartWorkspaceSymbolProvider } from "./providers/dart_workspace_symbol_provider";
+import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
 import { checkForStandardDartSdkUpdates } from "./sdk/update_check";
@@ -47,7 +60,6 @@ import { showUserPrompts } from "./user_prompts";
 import * as util from "./utils";
 import { addToLogHeader, clearLogHeader, getExtensionLogPath, getLogHeader } from "./utils/log";
 import { safeToolSpawn } from "./utils/processes";
-
 
 const DART_MODE = { language: "dart", scheme: "file" };
 const HTML_MODE = { language: "html", scheme: "file" };
@@ -184,6 +196,8 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// TODO: Do we need to push all these to subscriptions?!
 
 
+	const completionItemProvider = isUsingLsp || !dasClient ? undefined : new DartCompletionItemProvider(logger, dasClient);
+	const referenceProvider = isUsingLsp || !dasClient ? undefined : new DartReferenceProvider(dasClient);
 
 	const activeFileFilters: vs.DocumentFilter[] = [DART_MODE];
 
@@ -202,6 +216,39 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		activeFileFilters.push({ scheme: "file", pattern: `**/*.${ext}` });
 	}
 
+	const triggerCharacters = ".(${'\"/\\".split("");
+	if (!isUsingLsp && dasClient) {
+		context.subscriptions.push(vs.languages.registerHoverProvider(activeFileFilters, new DartHoverProvider(logger, dasClient)));
+		const formattingEditProvider = new DartFormattingEditProvider(logger, dasClient, extContext);
+		context.subscriptions.push(formattingEditProvider);
+		formattingEditProvider.registerDocumentFormatter(activeFileFilters);
+		// Only for Dart.
+		formattingEditProvider.registerTypingFormatter(DART_MODE, "}", ";");
+	}
+	if (completionItemProvider)
+		context.subscriptions.push(vs.languages.registerCompletionItemProvider(activeFileFilters, completionItemProvider, ...triggerCharacters));
+	if (referenceProvider) {
+		context.subscriptions.push(vs.languages.registerDefinitionProvider(activeFileFilters, referenceProvider));
+		context.subscriptions.push(vs.languages.registerReferenceProvider(activeFileFilters, referenceProvider));
+	}
+	let renameProvider: DartRenameProvider | undefined;
+	if (!isUsingLsp && dasClient && dasAnalyzer) {
+		context.subscriptions.push(vs.languages.registerDocumentHighlightProvider(activeFileFilters, new DartDocumentHighlightProvider(dasAnalyzer.fileTracker)));
+
+		renameProvider = new DartRenameProvider(dasClient);
+		context.subscriptions.push(vs.languages.registerRenameProvider(activeFileFilters, renameProvider));
+
+		// Dart only.
+		context.subscriptions.push(vs.languages.registerImplementationProvider(DART_MODE, new DartImplementationProvider(dasAnalyzer)));
+	}
+
+	// Task handlers.
+	if (config.previewBuildRunnerTasks) {
+		const provider = new PubBuildRunnerTaskProvider(sdks);
+		context.subscriptions.push(vs.tasks.registerTaskProvider(provider.type, provider));
+	}
+
+	context.subscriptions.push(vs.languages.setLanguageConfiguration(DART_MODE.language, new DartLanguageConfiguration()));
 
 	if (dasClient)
 		// tslint:disable-next-line: no-unused-expression
@@ -222,6 +269,19 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			serverConnected.dispose();
 			if (vs.workspace.workspaceFolders)
 				recalculateAnalysisRoots();
+
+			// Set up a handler to warn the user if they open a Dart file and we
+			// never set up the analyzer
+			let hasWarnedAboutLooseDartFiles = false;
+			const handleOpenFile = (d: vs.TextDocument) => {
+				if (!hasWarnedAboutLooseDartFiles && d.languageId === "dart" && d.uri.scheme === "file" && analysisRoots.length === 0) {
+					hasWarnedAboutLooseDartFiles = true;
+					vs.window.showWarningMessage("For full Dart language support, please open a folder containing your Dart files instead of individual loose files");
+				}
+			};
+			context.subscriptions.push(vs.workspace.onDidOpenTextDocument((d) => handleOpenFile(d)));
+			// Fire for editors already visible at the time this code runs.
+			vs.window.visibleTextEditors.forEach((e) => handleOpenFile(e.document));
 		});
 
 		// Hook editor changes to send updated contents to analyzer.
@@ -255,6 +315,31 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 			context.subscriptions.push(new RefactorCommands(logger, context, dasClient));
 
+			if (dasClient.capabilities.supportsGetDeclerations) {
+				context.subscriptions.push(vs.languages.registerWorkspaceSymbolProvider(new DartWorkspaceSymbolProvider(logger, dasClient)));
+			}
+
+			if (dasClient.capabilities.supportsCustomFolding && config.analysisServerFolding)
+				context.subscriptions.push(vs.languages.registerFoldingRangeProvider(activeFileFilters, new DartFoldingProvider(dasAnalyzer)));
+
+			if (dasClient.capabilities.supportsGetSignature)
+				context.subscriptions.push(vs.languages.registerSignatureHelpProvider(
+					DART_MODE,
+					new DartSignatureHelpProvider(dasClient),
+					...(config.triggerSignatureHelpAutomatically ? ["(", ","] : []),
+				));
+
+			const documentSymbolProvider = new DartDocumentSymbolProvider(logger, dasAnalyzer.fileTracker);
+			activeFileFilters.forEach((filter) => {
+				context.subscriptions.push(vs.languages.registerDocumentSymbolProvider(filter, documentSymbolProvider));
+			});
+
+			// Set up completions for unimported items.
+			if (dasClient.capabilities.supportsAvailableSuggestions && config.autoImportCompletions) {
+				await dasClient.completionSetSubscriptions({
+					subscriptions: ["AVAILABLE_SUGGESTION_SETS"],
+				});
+			}
 		});
 	}
 
@@ -365,6 +450,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			analyzer,
 			analyzerCapabilities: dasClient && dasClient.capabilities,
 			cancelAllAnalysisRequests: () => dasClient && dasClient.cancelAllRequests(),
+			completionItemProvider,
 			context: extContext,
 			currentAnalysis: () => analyzer.onCurrentAnalysisComplete,
 			daemonCapabilities: flutterDaemon ? flutterDaemon.capabilities : DaemonCapabilities.empty,
@@ -383,6 +469,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			logger,
 			nextAnalysis: () => analyzer.onNextAnalysisComplete,
 			pubGlobal,
+			renameProvider,
 			safeToolSpawn,
 			webClient,
 			workspaceContext,
