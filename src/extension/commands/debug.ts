@@ -9,7 +9,6 @@ import { findProjectFolders, fsPath } from "../../shared/utils/fs";
 import { showDevToolsNotificationIfAppropriate } from "../../shared/vscode/user_prompts";
 import { envUtils, getDartWorkspaceFolders } from "../../shared/vscode/utils";
 import { Context } from "../../shared/vscode/workspace";
-import { Analytics } from "../analytics";
 import { config } from "../config";
 import { ServiceExtensionArgs, timeDilationNormal, timeDilationSlow, VmServiceExtensions } from "../flutter/vm_service_extensions";
 import { PubGlobal } from "../pub/global";
@@ -55,9 +54,9 @@ export class DebugCommands {
 	public readonly vmServices: VmServiceExtensions;
 	private readonly devTools: DevToolsManager;
 
-	constructor(private readonly logger: Logger, private context: Context, workspaceContext: DartWorkspaceContext, private readonly analytics: Analytics, pubGlobal: PubGlobal) {
+	constructor(private readonly logger: Logger, private context: Context, workspaceContext: DartWorkspaceContext, pubGlobal: PubGlobal) {
 		this.vmServices = new VmServiceExtensions(logger, this.sendServiceSetting);
-		this.devTools = new DevToolsManager(logger, workspaceContext, this, analytics, pubGlobal);
+		this.devTools = new DevToolsManager(logger, workspaceContext, this, pubGlobal);
 		context.subscriptions.push(this.devTools);
 		context.subscriptions.push(this.debugOptions);
 		context.subscriptions.push(this.debugMetrics);
@@ -90,7 +89,6 @@ export class DebugCommands {
 				: await this.promptForDebugSession();
 			if (session && !session.session.configuration.noDebug && session.observatoryUri) {
 				await envUtils.openInBrowser(session.observatoryUri);
-				analytics.logDebuggerOpenObservatory();
 			} else if (session) {
 				logger.warn("Cannot start Observatory for session without debug/observatoryUri");
 			}
@@ -103,7 +101,6 @@ export class DebugCommands {
 				: await this.promptForDebugSession();
 			if (session && !session.session.configuration.noDebug && session.observatoryUri) {
 				await envUtils.openInBrowser(session.observatoryUri + "/#/timeline-dashboard");
-				analytics.logDebuggerOpenTimeline();
 			} else if (session) {
 				logger.warn("Cannot start Observatory for session without debug/observatoryUri");
 			}
@@ -149,14 +146,12 @@ export class DebugCommands {
 				return;
 			this.onWillHotReloadEmitter.fire();
 			debugSessions.forEach((s) => s.session.customRequest("hotReload", args));
-			analytics.logDebuggerHotReload();
 		}));
 		context.subscriptions.push(vs.commands.registerCommand("flutter.hotRestart", (args?: any) => {
 			if (!debugSessions.length)
 				return;
 			this.onWillHotRestartEmitter.fire();
 			debugSessions.forEach((s) => s.session.customRequest("hotRestart", args));
-			analytics.logDebuggerRestart();
 		}));
 		context.subscriptions.push(vs.commands.registerCommand("dart.startDebugging", (resource: vs.Uri, launchTemplate: any | undefined) => {
 			const launchConfig = Object.assign(
@@ -391,7 +386,6 @@ export class DebugCommands {
 			session.progress[progressID]?.complete();
 
 		const debugSessionEnd = new Date();
-		this.analytics.logDebugSessionDuration(session.debuggerType, debugSessionEnd.getTime() - session.sessionStart.getTime());
 
 		// If this was the last session terminating, then remove all the flags for which service extensions are supported.
 		// Really we should track these per-session, but the changes of them being different given we only support one
@@ -430,13 +424,11 @@ export class DebugCommands {
 			// This event comes back when the user restarts with the Restart button
 			// (eg. it wasn't intiated from our extension, so we don't get to log it
 			// in the command).
-			this.analytics.logDebuggerRestart();
 			this.onWillHotRestartEmitter.fire();
 		} else if (e.event === "dart.hotReloadRequest") {
 			// This event comes back when the user restarts with the Restart button
 			// (eg. it wasn't intiated from our extension, so we don't get to log it
 			// in the command).
-			this.analytics.logDebuggerHotReload();
 			this.onWillHotReloadEmitter.fire();
 		} else if (e.event === "dart.flutter.firstFrame") {
 			this.onFirstFrameEmitter.fire();

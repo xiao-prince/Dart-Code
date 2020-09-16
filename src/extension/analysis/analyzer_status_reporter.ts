@@ -5,7 +5,6 @@ import { Logger } from "../../shared/interfaces";
 import { PromiseCompleter } from "../../shared/utils";
 import { extensionVersion } from "../../shared/vscode/extension_utils";
 import { WorkspaceContext } from "../../shared/workspace";
-import { Analytics } from "../analytics";
 import { config } from "../config";
 import { openLogContents } from "../utils";
 import { DasAnalyzerClient } from "./analyzer_das";
@@ -19,7 +18,7 @@ export class AnalyzerStatusReporter {
 	private analysisInProgress = false;
 	private analyzingPromise?: PromiseCompleter<void>;
 
-	constructor(private readonly logger: Logger, private readonly analyzer: DasAnalyzerClient, private readonly workspaceContext: WorkspaceContext, private readonly analytics: Analytics) {
+	constructor(private readonly logger: Logger, private readonly analyzer: DasAnalyzerClient, private readonly workspaceContext: WorkspaceContext) {
 		// TODO: Should these go in disposables?
 		// If so, do we need to worry about server cleaning them up if it disposes first?
 		analyzer.registerForServerStatus((n) => this.handleServerStatus(n));
@@ -93,8 +92,6 @@ export class AnalyzerStatusReporter {
 		this.logger.error(error.message, LogCategory.Analyzer);
 		if (error.stackTrace)
 			this.logger.error(error.stackTrace, LogCategory.Analyzer);
-
-		this.analytics.logError(`Analyzer server error${method ? ` (${method})` : ""}`, error.isFatal);
 
 		errorCount++;
 

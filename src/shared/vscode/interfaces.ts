@@ -1,4 +1,4 @@
-import { CompletionItem, CompletionItemProvider, DebugConfigurationProvider, DebugSession, DebugSessionCustomEvent, MarkdownString, RenameProvider, TextDocument, TreeDataProvider, TreeItem, Uri } from "vscode";
+import { CompletionItem, CompletionItemProvider, DebugSession, DebugSessionCustomEvent, MarkdownString, RenameProvider, TextDocument, TreeDataProvider, TreeItem, Uri } from "vscode";
 import { AvailableSuggestion, FlutterOutline, Outline } from "../analysis_server_types";
 import { Analyzer } from "../analyzer";
 import { TestStatus, VersionStatus, VmService, VmServiceExtension } from "../enums";
@@ -49,7 +49,6 @@ export interface InternalExtensionApi {
 		webSupportsHotReload: boolean;
 	};
 	debugCommands: DebugCommandHandler;
-	debugProvider: DebugConfigurationProvider;
 	debugSessions: Array<{ loadedServiceExtensions: VmServiceExtension[] }>;
 	envUtils: {
 		openInBrowser(url: string): Promise<boolean>;

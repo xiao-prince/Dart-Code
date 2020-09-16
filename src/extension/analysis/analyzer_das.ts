@@ -9,7 +9,6 @@ import { DartSdks, Logger } from "../../shared/interfaces";
 import { nullLogger } from "../../shared/logging";
 import { PromiseCompleter, versionIsAtLeast } from "../../shared/utils";
 import { WorkspaceContext } from "../../shared/workspace";
-import { Analytics } from "../analytics";
 import { config } from "../config";
 import { escapeShell, promptToReloadExtension } from "../utils";
 import { getToolEnv } from "../utils/processes";
@@ -50,7 +49,7 @@ export class DasAnalyzer extends Analyzer {
 	public readonly client: DasAnalyzerClient;
 	public readonly fileTracker: DasFileTracker;
 
-	constructor(logger: Logger, analytics: Analytics, sdks: DartSdks, dartCapabilities: DartCapabilities, wsContext: WorkspaceContext) {
+	constructor(logger: Logger, sdks: DartSdks, dartCapabilities: DartCapabilities, wsContext: WorkspaceContext) {
 		super(nullLogger);
 		this.client = new DasAnalyzerClient(this.logger, sdks, dartCapabilities);
 		this.fileTracker = new DasFileTracker(logger, this.client, wsContext);
@@ -59,7 +58,6 @@ export class DasAnalyzer extends Analyzer {
 
 		const connectedEvent = this.client.registerForServerConnected((sc) => {
 			// TODO: Lsp equiv.
-			analytics.analysisServerVersion = sc.version;
 			this.onReadyCompleter.resolve();
 			connectedEvent.dispose();
 		});

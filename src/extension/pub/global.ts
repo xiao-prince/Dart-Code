@@ -4,14 +4,13 @@ import { moreInfoAction, noRepeatPromptThreshold, pubGlobalDocsUrl, pubPath } fr
 import { LogCategory, VersionStatus } from "../../shared/enums";
 import { CustomScript, DartSdks, Logger } from "../../shared/interfaces";
 import { logProcess } from "../../shared/logging";
-import { PubApi } from "../../shared/pub/api";
 import { pubVersionIsAtLeast, usingCustomScript } from "../../shared/utils";
 import { envUtils } from "../../shared/vscode/utils";
 import { Context } from "../../shared/vscode/workspace";
 import { safeToolSpawn } from "../utils/processes";
 
 export class PubGlobal {
-	constructor(private readonly logger: Logger, private context: Context, private sdks: DartSdks, private pubApi: PubApi) { }
+	constructor(private readonly logger: Logger, private context: Context, private sdks: DartSdks) { }
 
 	public async promptToInstallIfRequired(packageName: string, packageID: string, moreInfoLink = pubGlobalDocsUrl, requiredVersion: string, customActivateScript?: CustomScript, autoUpdate: boolean = false): Promise<string | undefined> {
 		let installedVersion = await this.getInstalledVersion(packageName, packageID);
@@ -91,16 +90,7 @@ export class PubGlobal {
 		const lastChecked = this.context.getPackageLastCheckedForUpdates(packageID);
 		if (!lastChecked || lastChecked <= Date.now() - noRepeatPromptThreshold) {
 			this.context.setPackageLastCheckedForUpdates(packageID, Date.now());
-			try {
-				const pubPackage = await this.pubApi.getPackage(packageID);
-				if (!pubVersionIsAtLeast(installedVersion, pubPackage.latest.version))
-					return VersionStatus.UpdateAvailable;
-			} catch (e) {
-				// If we fail to call the API to check for a new version, then we can run
-				// with what we have.
-				this.logger.warn(`Failed to check for new version of ${packageID}: ${e}`, LogCategory.CommandProcesses);
-				return VersionStatus.Valid;
-			}
+			return VersionStatus.Valid;
 		}
 
 		// Otherwise, we're installed and have a new enough version.

@@ -27,7 +27,6 @@ module.exports = env => {
 		devtool: "source-map",
 		entry: {
 			extension: "./src/extension/extension.ts",
-			debug: "./src/debug/debug_entry.ts"
 		},
 		// https://webpack.js.org/configuration/externals/
 		externals: {
@@ -50,15 +49,6 @@ module.exports = env => {
 		},
 		target: "node",
 	};
-
-	if (env && env.instrumentation) {
-		config.module.rules.push({
-			enforce: "post",
-			exclude: /node_modules/,
-			test: /\.ts$/,
-			loader: "istanbul-instrumenter-loader",
-		});
-	}
 
 	return config;
 };

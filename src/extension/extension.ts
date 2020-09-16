@@ -8,7 +8,6 @@ import { LogCategory } from "../shared/enums";
 import { WebClient } from "../shared/fetch";
 import { DartWorkspaceContext, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
 import { captureLogs, EmittingLogger, logToConsole, RingLog } from "../shared/logging";
-import { PubApi } from "../shared/pub/api";
 import { internalApiSymbol } from "../shared/symbols";
 import { uniq } from "../shared/utils";
 import { fsPath, isWithinPath } from "../shared/utils/fs";
@@ -23,7 +22,6 @@ import { DasAnalyzer } from "./analysis/analyzer_das";
 import { AnalyzerStatusReporter } from "./analysis/analyzer_status_reporter";
 import { FileChangeHandler } from "./analysis/file_change_handler";
 import { FileChangeWarnings } from "./analysis/file_change_warnings";
-import { Analytics } from "./analytics";
 import { DartExtensionApi } from "./api";
 import { AnalyzerCommands } from "./commands/analyzer";
 import { DebugCommands, debugSessions } from "./commands/debug";
@@ -54,8 +52,6 @@ import { DartReferenceProvider } from "./providers/dart_reference_provider";
 import { DartRenameProvider } from "./providers/dart_rename_provider";
 import { DartSignatureHelpProvider } from "./providers/dart_signature_help_provider";
 import { DartWorkspaceSymbolProvider } from "./providers/dart_workspace_symbol_provider";
-import { DartDebugAdapterDescriptorFactory } from "./providers/debug_adapter_descriptor_factory";
-import { DebugConfigProvider, DynamicDebugConfigProvider, InitialLaunchJsonDebugConfigProvider } from "./providers/debug_config_provider";
 import { FixCodeActionProvider } from "./providers/fix_code_action_provider";
 import { IgnoreLintCodeActionProvider } from "./providers/ignore_lint_code_action_provider";
 import { LegacyDartWorkspaceSymbolProvider } from "./providers/legacy_dart_workspace_symbol_provider";
@@ -93,7 +89,6 @@ let deviceManager: FlutterDeviceManager;
 const dartCapabilities = DartCapabilities.empty;
 const flutterCapabilities = FlutterCapabilities.empty;
 let analysisRoots: string[] = [];
-let analytics: Analytics;
 
 let showTodos: boolean | undefined;
 let previousSettings: string;
@@ -155,10 +150,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	setupLog(config.flutterDaemonLogFile, LogCategory.FlutterDaemon);
 	setupLog(config.devToolsLogFile, LogCategory.DevTools);
 
-	analytics = new Analytics(logger, workspaceContextUnverified);
 	if (!workspaceContextUnverified.sdks.dart || (workspaceContextUnverified.hasAnyFlutterProjects && !workspaceContextUnverified.sdks.flutter)) {
 		// Don't set anything else up; we can't work like this!
-		return sdkUtils.handleMissingSdks(context, analytics, workspaceContextUnverified);
+		return sdkUtils.handleMissingSdks(context, workspaceContextUnverified);
 	}
 
 	const workspaceContext = workspaceContextUnverified as DartWorkspaceContext;
@@ -166,7 +160,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	if (sdks.flutterVersion) {
 		flutterCapabilities.version = sdks.flutterVersion;
-		analytics.flutterSdkVersion = sdks.flutterVersion;
 	}
 
 	vs.commands.executeCommand("setContext", IS_LSP_CONTEXT, workspaceContext.config.useLsp);
@@ -174,7 +167,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Show the SDK version in the status bar.
 	if (sdks.dartVersion) {
 		dartCapabilities.version = sdks.dartVersion;
-		analytics.sdkVersion = sdks.dartVersion;
 		// tslint:disable-next-line: no-floating-promises
 		checkForStandardDartSdkUpdates(logger, workspaceContext);
 		context.subscriptions.push(new StatusBarVersionTracker(workspaceContext, isUsingLsp));
@@ -184,7 +176,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Fire up the analyzer process.
 	const analyzerStartTime = new Date();
 
-	analyzer = new DasAnalyzer(logger, analytics, sdks, dartCapabilities, workspaceContext);
+	analyzer = new DasAnalyzer(logger, sdks, dartCapabilities, workspaceContext);
 	const dasAnalyzer = analyzer as DasAnalyzer;
 	const dasClient = dasAnalyzer ? dasAnalyzer.client : undefined;
 	context.subscriptions.push(analyzer);
@@ -192,7 +184,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// tslint:disable-next-line: no-floating-promises
 	analyzer.onReady.then(() => {
 		const analyzerEndTime = new Date();
-		analytics.logAnalyzerStartupTime(analyzerEndTime.getTime() - analyzerStartTime.getTime());
 	});
 
 	// Log analysis server first analysis completion time when it completes.
@@ -205,7 +196,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		// Analysis ends for the first time.
 		if (!status.isAnalyzing && analysisStartTime) {
 			const analysisEndTime = new Date();
-			analytics.logAnalyzerFirstAnalysisTime(analysisEndTime.getTime() - analysisStartTime.getTime());
 			analysisCompleteEvents.dispose();
 		}
 	});
@@ -287,7 +277,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	if (dasClient)
 		// tslint:disable-next-line: no-unused-expression
-		new AnalyzerStatusReporter(logger, dasClient, workspaceContext, analytics);
+		new AnalyzerStatusReporter(logger, dasClient, workspaceContext);
 
 	context.subscriptions.push(new FileChangeWarnings());
 
@@ -339,16 +329,8 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	util.logTime("All other stuff before debugger..");
 
-	const pubApi = new PubApi(webClient);
-	const pubGlobal = new PubGlobal(logger, extContext, sdks, pubApi);
+	const pubGlobal = new PubGlobal(logger, extContext, sdks);
 
-	// Set up debug stuff.
-	const debugProvider = new DebugConfigProvider(logger, workspaceContext, analytics, pubGlobal, flutterDaemon, deviceManager, dartCapabilities, flutterCapabilities);
-	context.subscriptions.push(vs.debug.registerDebugConfigurationProvider("dart", debugProvider));
-	context.subscriptions.push(vs.debug.registerDebugAdapterDescriptorFactory("dart", new DartDebugAdapterDescriptorFactory(logger, context)));
-	// Also the providers for the initial configs.
-	context.subscriptions.push(vs.debug.registerDebugConfigurationProvider("dart", new InitialLaunchJsonDebugConfigProvider(), vs.DebugConfigurationProviderTriggerKind.Initial));
-	context.subscriptions.push(vs.debug.registerDebugConfigurationProvider("dart", new DynamicDebugConfigProvider(), vs.DebugConfigurationProviderTriggerKind.Dynamic));
 
 
 	if (!isUsingLsp && dasClient && dasAnalyzer) {
@@ -392,9 +374,9 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	context.subscriptions.push(vs.workspace.onDidChangeConfiguration(() => handleConfigurationChange(sdks)));
 
 	// Register additional commands.
-	const analyzerCommands = new AnalyzerCommands(context, logger, analyzer, analytics);
+	const analyzerCommands = new AnalyzerCommands(context, logger, analyzer);
 	const sdkCommands = new SdkCommands(logger, context, workspaceContext, sdkUtils, pubGlobal, flutterCapabilities, deviceManager);
-	const debugCommands = new DebugCommands(logger, extContext, workspaceContext, analytics, pubGlobal);
+	const debugCommands = new DebugCommands(logger, extContext, workspaceContext, pubGlobal);
 
 	// Wire up handling of Hot Reload on Save.
 	context.subscriptions.push(new HotReloadOnSaveHandler(debugCommands, flutterCapabilities));
@@ -469,11 +451,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 	// Log how long all this startup took.
 	const extensionEndTime = new Date();
-	if (isRestart) {
-		analytics.logExtensionRestart(extensionEndTime.getTime() - extensionStartTime.getTime());
-	} else {
-		analytics.logExtensionStartup(extensionEndTime.getTime() - extensionStartTime.getTime());
-	}
 
 	// Handle changes to the workspace.
 	// Set the roots, handling project changes that might affect SDKs.
@@ -506,7 +483,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			daemonCapabilities: flutterDaemon ? flutterDaemon.capabilities : DaemonCapabilities.empty,
 			dartCapabilities,
 			debugCommands,
-			debugProvider,
 			debugSessions,
 			envUtils,
 			fileTracker: dasAnalyzer.fileTracker,
@@ -670,7 +646,6 @@ export async function deactivate(isRestart: boolean = false): Promise<void> {
 	if (!isRestart) {
 		vs.commands.executeCommand("setContext", HAS_LAST_DEBUG_CONFIG, false);
 		vs.commands.executeCommand("setContext", HAS_LAST_TEST_DEBUG_CONFIG, false);
-		await analytics.logExtensionShutdown();
 		if (loggers) {
 			await Promise.all(loggers.map((logger) => logger.dispose()));
 			loggers.length = 0;

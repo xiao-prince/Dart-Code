@@ -860,31 +860,6 @@ export async function withTimeout<T>(promise: Thenable<T>, message: string | (()
 	});
 }
 
-async function getResolvedDebugConfiguration(extraConfiguration?: { [key: string]: any }): Promise<vs.DebugConfiguration | undefined | null> {
-	const debugConfig: vs.DebugConfiguration = Object.assign({}, {
-		name: "Dart & Flutter",
-		request: "launch",
-		type: "dart",
-	}, extraConfiguration);
-	return await extApi.debugProvider.resolveDebugConfigurationWithSubstitutedVariables!(vs.workspace.workspaceFolders![0], debugConfig);
-}
-
-export async function getLaunchConfiguration(script?: vs.Uri | string, extraConfiguration?: { [key: string]: any }): Promise<vs.DebugConfiguration | undefined | null> {
-	if (script instanceof vs.Uri)
-		script = fsPath(script);
-	const launchConfig = Object.assign({}, {
-		program: script,
-	}, extraConfiguration);
-	return await getResolvedDebugConfiguration(launchConfig);
-}
-
-export async function getAttachConfiguration(extraConfiguration?: { [key: string]: any }): Promise<vs.DebugConfiguration | undefined | null> {
-	const attachConfig = Object.assign({}, {
-		request: "attach",
-	}, extraConfiguration);
-	return await getResolvedDebugConfiguration(attachConfig);
-}
-
 export async function writeBrokenDartCodeIntoFileForTest(file: vs.Uri): Promise<void> {
 	const nextAnalysis = extApi.nextAnalysis();
 	fs.writeFileSync(fsPath(file), "this is broken dart code");

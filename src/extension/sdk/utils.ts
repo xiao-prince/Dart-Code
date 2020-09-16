@@ -1,18 +1,13 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { commands, ExtensionContext, window } from "vscode";
-import { analyzerSnapshotPath, dartExecutableName, dartPlatformName, dartVMPath, DART_DOWNLOAD_URL, flutterExecutableName, flutterPath, flutterSnapScript, FLUTTER_CREATE_PROJECT_TRIGGER_FILE, FLUTTER_DOWNLOAD_URL, initializeSnapPrompt, isLinux, isMac, isWin, showLogAction } from "../../shared/constants";
+import { analyzerSnapshotPath, dartExecutableName, dartVMPath, DART_DOWNLOAD_URL, flutterExecutableName, flutterPath, FLUTTER_CREATE_PROJECT_TRIGGER_FILE, FLUTTER_DOWNLOAD_URL, isMac, showLogAction } from "../../shared/constants";
 import { Logger, Sdks, WorkspaceConfig } from "../../shared/interfaces";
-import { nullLogger } from "../../shared/logging";
-import { PackageMap } from "../../shared/pub/package_map";
 import { flatMap, isDartSdkFromFlutter, notUndefined } from "../../shared/utils";
 import { findProjectFolders, fsPath, hasPubspec } from "../../shared/utils/fs";
 import { resolvedPromise } from "../../shared/utils/promises";
-import { processBazelWorkspace, processFlutterSnap, processFuchsiaWorkspace, processKnownGitRepositories } from "../../shared/utils/workspace";
 import { envUtils, getDartWorkspaceFolders } from "../../shared/vscode/utils";
 import { WorkspaceContext } from "../../shared/workspace";
-import { Analytics } from "../analytics";
 import { config } from "../config";
 import { ringLog } from "../extension";
 import { getSdkVersion, openLogContents, promptToReloadExtension, resolvePaths } from "../utils";
@@ -22,26 +17,26 @@ import { initializeFlutterSdk } from "./flutter";
 export class SdkUtils {
 	constructor(private readonly logger: Logger) { }
 
-	public handleMissingSdks(context: ExtensionContext, analytics: Analytics, workspaceContext: WorkspaceContext) {
+	public handleMissingSdks(context: ExtensionContext, workspaceContext: WorkspaceContext) {
 		// Note: This code only runs if we fail to find the Dart SDK, or fail to find the Flutter SDK
 		// and are in a Flutter project. In the case where we fail to find the Flutter SDK but are not
 		// in a Flutter project (eg. we ran Flutter Doctor without the extension activated) then
 		// this code will not be run as the extension will activate normally, and then the command-handling
 		// code for each command will detect the missing Flutter SDK and respond appropriately.
 		context.subscriptions.push(commands.registerCommand("flutter.createProject", (_) => {
-			this.showRelevantActivationFailureMessage(analytics, workspaceContext, true, "flutter.createProject");
+			this.showRelevantActivationFailureMessage(workspaceContext, true, "flutter.createProject");
 		}));
 		context.subscriptions.push(commands.registerCommand("dart.createProject", (_) => {
-			this.showRelevantActivationFailureMessage(analytics, workspaceContext, false, "dart.createProject");
+			this.showRelevantActivationFailureMessage(workspaceContext, false, "dart.createProject");
 		}));
 		context.subscriptions.push(commands.registerCommand("_dart.flutter.createSampleProject", (_) => {
-			this.showRelevantActivationFailureMessage(analytics, workspaceContext, true, "_dart.flutter.createSampleProject");
+			this.showRelevantActivationFailureMessage(workspaceContext, true, "_dart.flutter.createSampleProject");
 		}));
 		context.subscriptions.push(commands.registerCommand("flutter.doctor", (_) => {
-			this.showRelevantActivationFailureMessage(analytics, workspaceContext, true, "flutter.doctor");
+			this.showRelevantActivationFailureMessage(workspaceContext, true, "flutter.doctor");
 		}));
 		context.subscriptions.push(commands.registerCommand("flutter.upgrade", (_) => {
-			this.showRelevantActivationFailureMessage(analytics, workspaceContext, true, "flutter.upgrade");
+			this.showRelevantActivationFailureMessage(workspaceContext, true, "flutter.upgrade");
 		}));
 		// Wait a while before showing the error to allow the code above to have run if it will.
 		setTimeout(() => {
@@ -49,9 +44,9 @@ export class SdkUtils {
 			// a result of one of the above commands beinv invoked.
 			if (!this.hasShownActivationFailure) {
 				if (workspaceContext.hasAnyFlutterProjects) {
-					this.showRelevantActivationFailureMessage(analytics, workspaceContext, true);
+					this.showRelevantActivationFailureMessage(workspaceContext, true);
 				} else if (workspaceContext.hasAnyStandardDartProjects) {
-					this.showRelevantActivationFailureMessage(analytics, workspaceContext, false);
+					this.showRelevantActivationFailureMessage(workspaceContext, false);
 				} else {
 					this.logger.error("No Dart or Flutter SDK was found. Suppressing prompt because it doesn't appear that a Dart/Flutter project is open.");
 				}
@@ -61,7 +56,7 @@ export class SdkUtils {
 	}
 
 	private hasShownActivationFailure = false;
-	private showRelevantActivationFailureMessage(analytics: Analytics, workspaceContext: WorkspaceContext, isFlutter: boolean, commandToReRun?: string) {
+	private showRelevantActivationFailureMessage(workspaceContext: WorkspaceContext, isFlutter: boolean, commandToReRun?: string) {
 		if (isFlutter && workspaceContext.sdks.flutter && !workspaceContext.sdks.dart) {
 			this.showFluttersDartSdkActivationFailure();
 		} else if (isFlutter) {
@@ -70,7 +65,6 @@ export class SdkUtils {
 			this.showDartActivationFailure(commandToReRun);
 		}
 		if (!this.hasShownActivationFailure) {
-			analytics.logSdkDetectionFailure();
 			this.hasShownActivationFailure = true;
 		}
 	}
@@ -232,24 +226,11 @@ export class SdkUtils {
 			return undefined;
 		};
 
-		await processWorkspaceType(findGitRoot, processKnownGitRepositories);
-		// TODO: Remove this lambda when the preview flag is removed.
-		await processWorkspaceType(findBazelWorkspaceRoot, (l, c, b) => processBazelWorkspace(l, c, b, config.previewBazelWorkspaceCustomScripts));
-		const fuchsiaRoot = await processWorkspaceType(findFuchsiaRoot, processFuchsiaWorkspace);
-		await processWorkspaceType(findFlutterSnapSdkRoot, processFlutterSnap);
 
-		if (fuchsiaRoot) {
-			this.logger.info(`Found Fuchsia root at ${fuchsiaRoot}`);
-			if (hasAnyStandardDartProject)
-				this.logger.info(`Found Fuchsia project that is not vanilla Flutter`);
-		}
 
 		const flutterSdkSearchPaths = [
 			workspaceConfig?.flutterSdkHome,
 			config.flutterSdkPath,
-			// TODO: These could move into processFuchsiaWorkspace and be set on the config?
-			fuchsiaRoot && path.join(fuchsiaRoot, "lib/flutter"),
-			fuchsiaRoot && path.join(fuchsiaRoot, "third_party/dart-pkg/git/flutter"),
 			firstFlutterMobileProject,
 			firstFlutterMobileProject && extractFlutterSdkPathFromPackagesFile(firstFlutterMobileProject),
 			firstFlutterMobileProject && path.join(firstFlutterMobileProject, ".flutter"),
@@ -264,10 +245,6 @@ export class SdkUtils {
 		const dartSdkSearchPaths = [
 			isMac ? workspaceConfig?.dartSdkHomeMac : workspaceConfig?.dartSdkHomeLinux,
 			// TODO: These could move into processFuchsiaWorkspace and be set on the config?
-			fuchsiaRoot && path.join(fuchsiaRoot, "topaz/tools/prebuilt-dart-sdk", `${dartPlatformName}-x64`),
-			fuchsiaRoot && path.join(fuchsiaRoot, "third_party/dart/tools/sdks/dart-sdk"),
-			fuchsiaRoot && path.join(fuchsiaRoot, "third_party/dart/tools/sdks", dartPlatformName, "dart-sdk"),
-			fuchsiaRoot && path.join(fuchsiaRoot, "dart/tools/sdks", dartPlatformName, "dart-sdk"),
 			firstFlutterMobileProject && flutterSdkPath && path.join(flutterSdkPath, "bin/cache/dart-sdk"),
 			config.sdkPath,
 		].concat(paths)
@@ -303,7 +280,7 @@ export class SdkUtils {
 			hasAnyFlutterMobileProject,
 			hasAnyWebProject,
 			hasAnyStandardDartProject,
-			!!fuchsiaRoot && hasAnyStandardDartProject,
+			false,
 		);
 	}
 
@@ -397,101 +374,6 @@ export function referencesBuildRunner(folder?: string): boolean {
 }
 
 function extractFlutterSdkPathFromPackagesFile(projectFolder: string): string | undefined {
-	if (!fs.existsSync(projectFolder))
-		return undefined;
-
-	let packagePath = PackageMap.load(nullLogger, PackageMap.findPackagesFile(projectFolder)).getPackagePath("flutter");
-
-	if (!packagePath)
-		return undefined;
-
-	// Set windows slashes to / while manipulating.
-	if (isWin) {
-		packagePath = packagePath.replace(/\\/g, "/");
-	}
-
-	// Make sure ends with a slash.
-	if (!packagePath.endsWith("/"))
-		packagePath = packagePath + "/";
-
-	// Trim suffix we don't need.
-	const pathSuffix = "/packages/flutter/lib/";
-	if (packagePath.endsWith(pathSuffix)) {
-		packagePath = packagePath.substr(0, packagePath.length - pathSuffix.length);
-	}
-
-	// Make sure ends with a slash.
-	if (!packagePath.endsWith("/"))
-		packagePath = packagePath + "/";
-
-	// Append bin if required.
-	if (!packagePath.endsWith("/bin/")) {
-		packagePath = packagePath + "bin/";
-	}
-
-	// Set windows paths back.
-	if (isWin) {
-		packagePath = packagePath.replace(/\//g, "\\");
-		if (packagePath[0] === "\\")
-			packagePath = packagePath.substring(1);
-	}
-
-	return packagePath;
-}
-
-async function findFuchsiaRoot(logger: Logger, folder: string): Promise<string | undefined> {
-	return findRootContaining(folder, ".jiri_root");
-}
-
-async function findBazelWorkspaceRoot(logger: Logger, folder: string): Promise<string | undefined> {
-	return findRootContaining(folder, "WORKSPACE", true);
-}
-
-async function findGitRoot(logger: Logger, folder: string): Promise<string | undefined> {
-	return findRootContaining(folder, ".git");
-}
-
-async function findFlutterSnapSdkRoot(logger: Logger, folder: string): Promise<string | undefined> {
-	if (isLinux && fs.existsSync(flutterSnapScript)) {
-		logger.info(`Found Flutter snap script`);
-		const snapSdkRoot = path.join(os.homedir(), "/snap/flutter/common/flutter");
-
-		if (!fs.existsSync(snapSdkRoot + "/.git")) {
-			logger.info(`Flutter snap is not initialized, showing prompt`);
-			await initializeFlutterSdk(logger, flutterSnapScript, initializeSnapPrompt);
-		}
-
-		if (fs.existsSync(snapSdkRoot + "/.git")) {
-			logger.info(`Returning ${snapSdkRoot} as Flutter snap SDK root`);
-			return snapSdkRoot;
-		}
-	}
-	return undefined;
-}
-
-
-
-function findRootContaining(folder: string, childName: string, expectFile = false): string | undefined {
-	if (folder) {
-		// Walk up the directories from the workspace root, and see if there
-		// exists a directory which has `childName` file/directory as a child.
-		let child = folder;
-		while (child) {
-			try {
-				const stat = fs.statSync(path.join(child, childName));
-				if (expectFile ? stat.isFile() : stat.isDirectory()) {
-					return child;
-				}
-			} catch { }
-
-			const parentDir = path.dirname(child);
-			if (child === parentDir)
-				break;
-
-			child = parentDir;
-		}
-	}
-
 	return undefined;
 }
 

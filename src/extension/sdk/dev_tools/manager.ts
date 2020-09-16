@@ -15,7 +15,6 @@ import { arraysEqual } from "../../../shared/utils/array";
 import { getRandomInt } from "../../../shared/utils/fs";
 import { waitFor } from "../../../shared/utils/promises";
 import { envUtils, isRunningLocally } from "../../../shared/vscode/utils";
-import { Analytics } from "../../analytics";
 import { DebugCommands, debugSessions } from "../../commands/debug";
 import { config } from "../../config";
 import { PubGlobal } from "../../pub/global";
@@ -46,7 +45,7 @@ export class DevToolsManager implements vs.Disposable {
 	/// concurrent launches can wait on the same promise.
 	private devtoolsUrl: Thenable<string> | undefined;
 
-	constructor(private readonly logger: Logger, private readonly workspaceContext: DartWorkspaceContext, private readonly debugCommands: DebugCommands, private readonly analytics: Analytics, private readonly pubGlobal: PubGlobal) {
+	constructor(private readonly logger: Logger, private readonly workspaceContext: DartWorkspaceContext, private readonly debugCommands: DebugCommands, private readonly pubGlobal: PubGlobal) {
 		this.disposables.push(this.devToolsStatusBarItem);
 
 		if (workspaceContext.config?.activateDevToolsEagerly) {
@@ -68,7 +67,6 @@ export class DevToolsManager implements vs.Disposable {
 	/// Spawns DevTools and returns the full URL to open for that session
 	///   eg. http://127.0.0.1:8123/?port=8543
 	public async spawnForSession(session: DartDebugSessionInformation & { vmServiceUri: string }, options: DevToolsOptions): Promise<{ url: string, dispose: () => void } | undefined> {
-		this.analytics.logDebuggerOpenDevTools();
 
 		// If we're mid-silent-activation, wait until that's finished.
 		await this.devToolsActivationPromise;
