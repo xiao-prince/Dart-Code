@@ -91,6 +91,7 @@ export class SdkCommands {
 	}
 
 	private async getPackages(uri: string | Uri | undefined) {
+		console.log('Running et packages with ${uri}!!');
 		if (!uri || !(uri instanceof Uri)) {
 			uri = await this.getFolderToRunCommandIn("Select which folder to get packages for");
 			// If the user cancelled, bail out (otherwise we'll prompt them again below).

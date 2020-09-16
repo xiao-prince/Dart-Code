@@ -248,12 +248,12 @@ export async function activate(file?: vs.Uri | null | undefined): Promise<void> 
 
 export async function getPackages(uri?: vs.Uri) {
 	await activateWithoutAnalysis();
-	if (!(uri || (vs.workspace.workspaceFolders && vs.workspace.workspaceFolders.length))) {
-		logger.error("Cannot getPackages because there is no workspace folder and no URI was supplied");
-		return;
+	// await ext.activate();
+	if (ext.exports) {
+		extApi = ext.exports[internalApiSymbol];
 	}
 	await waitForNextAnalysis(async () => {
-		await vs.commands.executeCommand("dart.getPackages", uri || vs.workspace.workspaceFolders![0].uri);
+		await delay(500);
 	}, 60);
 }
 
