@@ -7,7 +7,6 @@ import * as vs from "vscode";
 import { dartCodeExtensionIdentifier, DART_TEST_SUITE_NODE_CONTEXT } from "../shared/constants";
 import { LogCategory } from "../shared/enums";
 import { Logger } from "../shared/interfaces";
-import { captureLogs } from "../shared/logging";
 import { internalApiSymbol } from "../shared/symbols";
 import { BufferedLogger, filenameSafe, flatMap } from "../shared/utils";
 import { fsPath } from "../shared/utils/fs";
@@ -176,18 +175,6 @@ function setupTestLogging(): boolean {
 	const emittingLogger = extApi.logger;
 
 	if (fileSafeCurrentTestName) {
-		const logFolder = process.env.DC_TEST_LOGS || path.join(ext.extensionPath, ".dart_code_test_logs");
-		if (!fs.existsSync(logFolder))
-			fs.mkdirSync(logFolder);
-		const logFile = fileSafeCurrentTestName + ".txt";
-		const logPath = path.join(logFolder, logFile);
-
-		// For debugger tests, the analyzer log is just noise, so we filter it out.
-		const excludeLogCategories = process.env.BOT && process.env.BOT.indexOf("debug") !== -1
-			? [LogCategory.Analyzer]
-			: undefined;
-		const testLogger = captureLogs(emittingLogger, logPath, extApi.getLogHeader(), 20000, excludeLogCategories, true);
-
 		deferUntilLast(async (testResult?: "passed" | "failed") => {
 			console.log('### 1');
 			await delay(1000);
