@@ -105,12 +105,6 @@ jobs:
           name: test-results-${{ matrix.os }}
           path: .test_results
 
-      - name: Store coverage
-        uses: actions/upload-artifact@v1
-        if: success() && matrix.dart-version == 'stable' && matrix.code-version == 'stable'
-        with:
-          name: coverage-${{ matrix.os }}
-          path: coverage
 
 
   upload_logs:
