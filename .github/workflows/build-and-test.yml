@@ -14,21 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [macOS-latest]
         node-version: [10]
         build-version: [stable]
-        bot: [flutter_debug, flutter_debug_chrome, flutter_test_debug, dart_web_debug, flutter_repo, dart_debug, dart, flutter, misc]
+        bot: [flutter]
         include:
           - build-version: stable
             dart-version: stable
             flutter-version: stable
             code-version: stable
-        #   - build-version: dev
-        #     dart-version: dev
-        #     flutter-version: dev
-        #     code-version: insiders
-          - os: ubuntu-latest
-            bot: flutter_snap
 
     steps:
 
@@ -70,21 +64,6 @@ jobs:
         if: matrix.bot != 'flutter_snap' && !startsWith(matrix.bot, 'dart')
         run: flutter --version
 
-      - name: Enable Flutter web support
-        if: startsWith(matrix.bot, 'flutter') && matrix.bot != 'flutter_snap'
-        run: flutter config --enable-web
-
-      - run: |
-          pub global activate --no-executables devtools
-          pub global activate --no-executables webdev
-          pub global activate --no-executables stagehand
-          pub global activate --no-executables args 1.5.0
-          pub global activate --no-executables meta 1.1.6
-          pub global activate --no-executables pedantic 1.4.0
-          pub global activate --no-executables json_annotation 1.2.0
-        if: matrix.bot != 'flutter_snap'
-        shell: pwsh
-
       - name: npm install
         run: npm install
 
@@ -93,11 +72,6 @@ jobs:
 
       - name: npm build
         run: npm run build
-
-      - name: pub get (hello_world)
-        if: startsWith(matrix.bot, 'dart')
-        run: pub get
-        working-directory: src/test/test_projects/hello_world
 
       - name: flutter pub get (flutter_hello_world)
         if: startsWith(matrix.bot, 'flutter') && matrix.bot != 'flutter_snap'
@@ -200,48 +174,3 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-  upload_coverage:
-
-    name: Send Coverage to CodeClimate
-    needs: build
-    if: always() && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - uses: actions/checkout@v1
-
-      - name: Fetch Linux coverage
-        uses: actions/download-artifact@v1
-        with:
-          name: coverage-ubuntu-latest
-          path: coverage/linux
-
-      - name: Upload to CodeClimate
-        run: |
-          curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-          chmod +x ./cc-test-reporter
-          export GIT_BRANCH="${GITHUB_REF/refs\/heads\//}"
-          export GIT_SHA="${GITHUB_SHA}"
-          find coverage/**/**/lcov.info | cut -d '/' -f2- | xargs -I % -n1 ./cc-test-reporter format-coverage -t lcov -o coverage/%.json coverage/% # -p /home/runner/work/Dart-Code/Dart-Code
-          ./cc-test-reporter sum-coverage -o coverage/codeclimate.json coverage/**/**/lcov.info.json
-          ./cc-test-reporter upload-coverage
-        env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-
-
-  notify_failure:
-
-    name: Notify Discord of Failure
-    needs: build
-    if: failure() && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Send notification to Discord
-        run: 'Invoke-WebRequest -Headers @{ "Content-Type" = "application/json" } -Method Post -Body "{`"content`":`"Build failed on $($env:GITHUB_REF.Replace(`"refs/heads/`", `"`")): https://github.com/Dart-Code/Dart-Code/commit/$($env:GITHUB_SHA)/checks`"}" -Uri $env:DISCORD_WEBHOOK'
-        shell: pwsh
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
