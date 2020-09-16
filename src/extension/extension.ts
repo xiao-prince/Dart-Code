@@ -40,12 +40,6 @@ import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
 import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
-import { DartDocumentSymbolProvider } from "./providers/dart_document_symbol_provider";
-import { DartFoldingProvider } from "./providers/dart_folding_provider";
-import { DartFormattingEditProvider } from "./providers/dart_formatting_edit_provider";
-import { DartDocumentHighlightProvider } from "./providers/dart_highlighting_provider";
-import { DartHoverProvider } from "./providers/dart_hover_provider";
-import { DartImplementationProvider } from "./providers/dart_implementation_provider";
 import { DartLanguageConfiguration } from "./providers/dart_language_configuration";
 import { DartReferenceProvider } from "./providers/dart_reference_provider";
 import { DartRenameProvider } from "./providers/dart_rename_provider";
@@ -217,14 +211,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	}
 
 	const triggerCharacters = ".(${'\"/\\".split("");
-	if (!isUsingLsp && dasClient) {
-		context.subscriptions.push(vs.languages.registerHoverProvider(activeFileFilters, new DartHoverProvider(logger, dasClient)));
-		const formattingEditProvider = new DartFormattingEditProvider(logger, dasClient, extContext);
-		context.subscriptions.push(formattingEditProvider);
-		formattingEditProvider.registerDocumentFormatter(activeFileFilters);
-		// Only for Dart.
-		formattingEditProvider.registerTypingFormatter(DART_MODE, "}", ";");
-	}
 	if (completionItemProvider)
 		context.subscriptions.push(vs.languages.registerCompletionItemProvider(activeFileFilters, completionItemProvider, ...triggerCharacters));
 	if (referenceProvider) {
@@ -233,13 +219,10 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	}
 	let renameProvider: DartRenameProvider | undefined;
 	if (!isUsingLsp && dasClient && dasAnalyzer) {
-		context.subscriptions.push(vs.languages.registerDocumentHighlightProvider(activeFileFilters, new DartDocumentHighlightProvider(dasAnalyzer.fileTracker)));
 
 		renameProvider = new DartRenameProvider(dasClient);
 		context.subscriptions.push(vs.languages.registerRenameProvider(activeFileFilters, renameProvider));
 
-		// Dart only.
-		context.subscriptions.push(vs.languages.registerImplementationProvider(DART_MODE, new DartImplementationProvider(dasAnalyzer)));
 	}
 
 	// Task handlers.
@@ -319,8 +302,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 				context.subscriptions.push(vs.languages.registerWorkspaceSymbolProvider(new DartWorkspaceSymbolProvider(logger, dasClient)));
 			}
 
-			if (dasClient.capabilities.supportsCustomFolding && config.analysisServerFolding)
-				context.subscriptions.push(vs.languages.registerFoldingRangeProvider(activeFileFilters, new DartFoldingProvider(dasAnalyzer)));
 
 			if (dasClient.capabilities.supportsGetSignature)
 				context.subscriptions.push(vs.languages.registerSignatureHelpProvider(
@@ -328,11 +309,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 					new DartSignatureHelpProvider(dasClient),
 					...(config.triggerSignatureHelpAutomatically ? ["(", ","] : []),
 				));
-
-			const documentSymbolProvider = new DartDocumentSymbolProvider(logger, dasAnalyzer.fileTracker);
-			activeFileFilters.forEach((filter) => {
-				context.subscriptions.push(vs.languages.registerDocumentSymbolProvider(filter, documentSymbolProvider));
-			});
 
 			// Set up completions for unimported items.
 			if (dasClient.capabilities.supportsAvailableSuggestions && config.autoImportCompletions) {
