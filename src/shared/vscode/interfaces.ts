@@ -1,4 +1,4 @@
-import { CompletionItem, CompletionItemProvider, DebugSession, DebugSessionCustomEvent, MarkdownString, RenameProvider, TextDocument, TreeDataProvider, TreeItem, Uri } from "vscode";
+import { CompletionItem, DebugSession, DebugSessionCustomEvent, MarkdownString, TextDocument, TreeDataProvider, TreeItem, Uri } from "vscode";
 import { AvailableSuggestion, FlutterOutline, Outline } from "../analysis_server_types";
 import { Analyzer } from "../analyzer";
 import { TestStatus, VersionStatus, VmService, VmServiceExtension } from "../enums";
@@ -28,7 +28,6 @@ export interface InternalExtensionApi {
 		supportsIncludedImports: boolean;
 	};
 	cancelAllAnalysisRequests: () => void;
-	completionItemProvider: CompletionItemProvider;
 	context: Context;
 	currentAnalysis: () => Promise<void>;
 	cursorIsInTest: boolean;
@@ -81,7 +80,6 @@ export interface InternalExtensionApi {
 		getInstalledVersion(packageName: string, packageID: string): Promise<string | undefined>;
 		uninstall(packageID: string): Promise<void>;
 	};
-	renameProvider: RenameProvider | undefined;
 	safeToolSpawn: (workingDirectory: string | undefined, binPath: string, args: string[], envOverrides?: { [key: string]: string | undefined }) => SpawnedProcess;
 	webClient: WebClient;
 	workspaceContext: WorkspaceContext;
