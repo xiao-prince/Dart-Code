@@ -21,13 +21,10 @@ import { WorkspaceContext } from "../shared/workspace";
 import { DasAnalyzer } from "./analysis/analyzer_das";
 import { AnalyzerStatusReporter } from "./analysis/analyzer_status_reporter";
 import { FileChangeHandler } from "./analysis/file_change_handler";
-import { FileChangeWarnings } from "./analysis/file_change_warnings";
 import { DartExtensionApi } from "./api";
-import { AnalyzerCommands } from "./commands/analyzer";
 import { DebugCommands, debugSessions } from "./commands/debug";
 import { EditCommands } from "./commands/edit";
 import { DasEditCommands } from "./commands/edit_das";
-import { GoToSuperCommand } from "./commands/go_to_super";
 import { LoggingCommands } from "./commands/logging";
 import { OpenInOtherEditorCommands } from "./commands/open_in_other_editors";
 import { RefactorCommands } from "./commands/refactor";
@@ -212,8 +209,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		// tslint:disable-next-line: no-unused-expression
 		new AnalyzerStatusReporter(logger, dasClient, workspaceContext);
 
-	context.subscriptions.push(new FileChangeWarnings());
-
 	// Set up diagnostics.
 	if (!isUsingLsp && dasClient) {
 		// TODO: Currently calculating analysis roots requires the version to check if
@@ -282,7 +277,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	context.subscriptions.push(vs.workspace.onDidChangeConfiguration(() => handleConfigurationChange(sdks)));
 
 	// Register additional commands.
-	const analyzerCommands = new AnalyzerCommands(context, logger, analyzer);
 	const sdkCommands = new SdkCommands(logger, context, workspaceContext, sdkUtils, pubGlobal, flutterCapabilities, deviceManager);
 	const debugCommands = new DebugCommands(logger, extContext, workspaceContext, pubGlobal);
 
@@ -303,7 +297,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	if (dasClient && dasAnalyzer) {
 		context.subscriptions.push(new DasEditCommands(logger, context, dasClient));
 		context.subscriptions.push(new TypeHierarchyCommand(logger, dasClient));
-		context.subscriptions.push(new GoToSuperCommand(dasAnalyzer));
 	}
 
 
