@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as fs from "fs";
 import { tmpdir } from "os";
 import * as path from "path";
-import * as sinon from "sinon";
 import * as vs from "vscode";
 import { dartCodeExtensionIdentifier, DART_TEST_SUITE_NODE_CONTEXT } from "../shared/constants";
 import { LogCategory } from "../shared/enums";
@@ -211,12 +210,6 @@ beforeEach("stash current test name", async function () {
 	deferUntilLast(() => fileSafeCurrentTestName = "unknown");
 });
 
-export let sb: sinon.SinonSandbox;
-beforeEach("create sinon sandbox", () => {
-	if (logger)
-		logger.info(`Creating sinon sandbox`);
-	sb = sinon.createSandbox();
-});
 
 before("throw if DART_CODE_IS_TEST_RUN is not set", () => {
 	if (!process.env.DART_CODE_IS_TEST_RUN)
@@ -255,12 +248,6 @@ export function defer(callback: (result?: "failed" | "passed") => Promise<any> |
 export function deferUntilLast(callback: (result?: "failed" | "passed") => Promise<any> | any): void {
 	deferredToLastItems.push(callback);
 }
-
-afterEach("destroy sinon sandbox", () => {
-	if (logger)
-		logger.info(`Restoring sinon sandbox`);
-	sb.restore();
-});
 
 export async function setTestContent(content: string): Promise<void> {
 	const editor = currentEditor();
