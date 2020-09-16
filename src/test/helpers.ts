@@ -247,14 +247,20 @@ export async function activate(file?: vs.Uri | null | undefined): Promise<void> 
 }
 
 export async function getPackages(uri?: vs.Uri) {
+	console.log('WAITING FOR PACKAGES');
 	await activateWithoutAnalysis();
+	console.log('WAITING FOR PACKAGES222');
 	// await ext.activate();
 	if (ext.exports) {
 		extApi = ext.exports[internalApiSymbol];
 	}
+	console.log('WAITING FOR PACKAGES333');
 	await waitForNextAnalysis(async () => {
+		console.log('WAITING FOR PACKAGES444');
 		await delay(500);
+		console.log('WAITING FOR PACKAGES555');
 	}, 60);
+	console.log('WAITING FOR PACKAGES666');
 }
 
 function logOpenEditors() {
@@ -835,13 +841,14 @@ export async function waitForEditorChange(action: () => Thenable<void>): Promise
 
 export async function waitForNextAnalysis(action: () => void | Thenable<void>, timeoutSeconds?: number): Promise<void> {
 	logger.info("Waiting for any in-progress analysis to complete");
-	await extApi.currentAnalysis();
+	// await extApi.currentAnalysis();
 	// Get a new completer for the next analysis.
 	const nextAnalysis = extApi.nextAnalysis();
 	logger.info("Running requested action");
 	await action();
 	logger.info(`Waiting for analysis to complete`);
-	await withTimeout(nextAnalysis, "Analysis did not complete within specified timeout", timeoutSeconds);
+	// await withTimeout(nextAnalysis, "Analysis did not complete within specified timeout", timeoutSeconds);
+	await nextAnalysis;
 }
 
 export async function withTimeout<T>(promise: Thenable<T>, message: string | (() => string), seconds: number = 360): Promise<T> {
