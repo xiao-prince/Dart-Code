@@ -6,11 +6,12 @@ import { DaemonCapabilities, FlutterCapabilities } from "../shared/capabilities/
 import { dartPlatformName, flutterExtensionIdentifier, HAS_LAST_DEBUG_CONFIG, HAS_LAST_TEST_DEBUG_CONFIG, isWin, IS_LSP_CONTEXT, IS_RUNNING_LOCALLY_CONTEXT, platformDisplayName, PUB_OUTDATED_SUPPORTED_CONTEXT } from "../shared/constants";
 import { LogCategory } from "../shared/enums";
 import { WebClient } from "../shared/fetch";
-import { DartWorkspaceContext, Logger, Sdks } from "../shared/interfaces";
+import { DartWorkspaceContext, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
 import { captureLogs, EmittingLogger, logToConsole, RingLog } from "../shared/logging";
 import { internalApiSymbol } from "../shared/symbols";
 import { uniq } from "../shared/utils";
 import { fsPath, isWithinPath } from "../shared/utils/fs";
+import { FlutterDeviceManager } from "../shared/vscode/device_manager";
 import { extensionVersion, isDevExtension } from "../shared/vscode/extension_utils";
 import { InternalExtensionApi } from "../shared/vscode/interfaces";
 import { DartUriHandler } from "../shared/vscode/uri_handlers/uri_handler";
@@ -22,6 +23,8 @@ import { AnalyzerStatusReporter } from "./analysis/analyzer_status_reporter";
 import { FileChangeHandler } from "./analysis/file_change_handler";
 import { DartExtensionApi } from "./api";
 import { config } from "./config";
+import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
+import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
@@ -47,6 +50,8 @@ export const SERVICE_EXTENSION_CONTEXT_PREFIX = "dart-code:serviceExtension.";
 export const SERVICE_CONTEXT_PREFIX = "dart-code:service.";
 
 let analyzer: Analyzer;
+let flutterDaemon: IFlutterDaemon;
+let deviceManager: FlutterDeviceManager;
 const dartCapabilities = DartCapabilities.empty;
 const flutterCapabilities = FlutterCapabilities.empty;
 let analysisRoots: string[] = [];
@@ -222,6 +227,20 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		context.subscriptions.push(new FileChangeHandler(dasClient));
 	}
 
+	// Fire up Flutter daemon if required.
+	if (workspaceContext.hasAnyFlutterMobileProjects && sdks.flutter) {
+		flutterDaemon = new FlutterDaemon(logger, workspaceContext as FlutterWorkspaceContext);
+		deviceManager = new FlutterDeviceManager(logger, flutterDaemon, config);
+
+		context.subscriptions.push(deviceManager);
+		context.subscriptions.push(flutterDaemon);
+
+		setUpDaemonMessageHandler(logger, context, flutterDaemon);
+
+		context.subscriptions.push(vs.commands.registerCommand("flutter.selectDevice", deviceManager.showDevicePicker, deviceManager));
+		context.subscriptions.push(vs.commands.registerCommand("flutter.launchEmulator", deviceManager.promptForAndLaunchEmulator, deviceManager));
+	}
+
 	util.logTime("All other stuff before debugger..");
 
 	const pubGlobal = new PubGlobal(logger, extContext, sdks);
@@ -319,7 +338,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			cancelAllAnalysisRequests: () => dasClient && dasClient.cancelAllRequests(),
 			context: extContext,
 			currentAnalysis: () => analyzer.onCurrentAnalysisComplete,
-			daemonCapabilities: DaemonCapabilities.empty,
+			daemonCapabilities: flutterDaemon ? flutterDaemon.capabilities : DaemonCapabilities.empty,
 			dartCapabilities,
 			envUtils,
 			fileTracker: dasAnalyzer.fileTracker,
