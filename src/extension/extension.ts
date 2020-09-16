@@ -41,10 +41,6 @@ import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
 import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
 import { DartLanguageConfiguration } from "./providers/dart_language_configuration";
-import { DartReferenceProvider } from "./providers/dart_reference_provider";
-import { DartRenameProvider } from "./providers/dart_rename_provider";
-import { DartSignatureHelpProvider } from "./providers/dart_signature_help_provider";
-import { DartWorkspaceSymbolProvider } from "./providers/dart_workspace_symbol_provider";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
@@ -191,7 +187,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 
 
 	const completionItemProvider = isUsingLsp || !dasClient ? undefined : new DartCompletionItemProvider(logger, dasClient);
-	const referenceProvider = isUsingLsp || !dasClient ? undefined : new DartReferenceProvider(dasClient);
 
 	const activeFileFilters: vs.DocumentFilter[] = [DART_MODE];
 
@@ -213,17 +208,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	const triggerCharacters = ".(${'\"/\\".split("");
 	if (completionItemProvider)
 		context.subscriptions.push(vs.languages.registerCompletionItemProvider(activeFileFilters, completionItemProvider, ...triggerCharacters));
-	if (referenceProvider) {
-		context.subscriptions.push(vs.languages.registerDefinitionProvider(activeFileFilters, referenceProvider));
-		context.subscriptions.push(vs.languages.registerReferenceProvider(activeFileFilters, referenceProvider));
-	}
-	let renameProvider: DartRenameProvider | undefined;
-	if (!isUsingLsp && dasClient && dasAnalyzer) {
-
-		renameProvider = new DartRenameProvider(dasClient);
-		context.subscriptions.push(vs.languages.registerRenameProvider(activeFileFilters, renameProvider));
-
-	}
 
 	// Task handlers.
 	if (config.previewBuildRunnerTasks) {
@@ -297,18 +281,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			connectedSetup.dispose();
 
 			context.subscriptions.push(new RefactorCommands(logger, context, dasClient));
-
-			if (dasClient.capabilities.supportsGetDeclerations) {
-				context.subscriptions.push(vs.languages.registerWorkspaceSymbolProvider(new DartWorkspaceSymbolProvider(logger, dasClient)));
-			}
-
-
-			if (dasClient.capabilities.supportsGetSignature)
-				context.subscriptions.push(vs.languages.registerSignatureHelpProvider(
-					DART_MODE,
-					new DartSignatureHelpProvider(dasClient),
-					...(config.triggerSignatureHelpAutomatically ? ["(", ","] : []),
-				));
 
 			// Set up completions for unimported items.
 			if (dasClient.capabilities.supportsAvailableSuggestions && config.autoImportCompletions) {
@@ -445,7 +417,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			logger,
 			nextAnalysis: () => analyzer.onNextAnalysisComplete,
 			pubGlobal,
-			renameProvider,
 			safeToolSpawn,
 			webClient,
 			workspaceContext,
