@@ -1,4 +1,4 @@
-import { Diagnostic, DiagnosticCollection, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Range, Uri } from "vscode";
+import { Diagnostic, DiagnosticCollection, DiagnosticSeverity, Uri } from "vscode";
 import * as as from "../../shared/analysis_server_types";
 import { toRangeOnLine } from "../../shared/vscode/utils";
 import { DasAnalyzerClient } from "../analysis/analyzer_das";
@@ -37,39 +37,17 @@ export class DartDiagnosticProvider {
 	}
 
 	public static createDiagnostic(error: as.AnalysisError): Diagnostic {
-		const diag = new DartDiagnostic(
+		const diag = new Diagnostic(
 			toRangeOnLine(error.location),
 			error.message,
-			DiagnosticSeverity.Error,
-			error.type,
+			DiagnosticSeverity.Error
 		);
 		diag.code = error.url ? { value: error.code, target: Uri.parse(error.url) } : error.code;
 		diag.source = "dart";
 		if (error.correction)
 			diag.message += `\n${error.correction}`;
-		if (error.contextMessages && error.contextMessages.length)
-			diag.relatedInformation = error.contextMessages.map(DartDiagnosticProvider.createRelatedInformation);
 		return diag;
 	}
 
-	public static createRelatedInformation(related: as.DiagnosticMessage) {
-		return new DiagnosticRelatedInformation(
-			new Location(
-				Uri.file(related.location.file),
-				toRangeOnLine(related.location),
-			),
-			related.message,
-		);
-	}
 }
 
-export class DartDiagnostic extends Diagnostic {
-	constructor(
-		range: Range,
-		message: string,
-		severity: DiagnosticSeverity,
-		public readonly type: string,
-	) {
-		super(range, message, severity);
-	}
-}
