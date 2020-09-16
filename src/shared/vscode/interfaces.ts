@@ -75,6 +75,7 @@ export interface InternalExtensionApi {
 		uninstall(packageID: string): Promise<void>;
 	};
 	safeToolSpawn: (workingDirectory: string | undefined, binPath: string, args: string[], envOverrides?: { [key: string]: string | undefined }) => SpawnedProcess;
+	shutdown: () => void,
 	webClient: WebClient;
 	workspaceContext: WorkspaceContext;
 }

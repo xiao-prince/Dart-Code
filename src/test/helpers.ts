@@ -216,6 +216,11 @@ before("throw if DART_CODE_IS_TEST_RUN is not set", () => {
 		throw new Error("DART_CODE_IS_TEST_RUN env var should be set for test runs.");
 });
 
+after("LOGLOG", () => {
+	console.log('AFTER EVERYTHING???');
+	extApi?.shutdown();
+});
+
 const deferredItems: Array<(result?: "failed" | "passed") => Promise<any> | any> = [];
 const deferredToLastItems: Array<(result?: "failed" | "passed") => Promise<any> | any> = [];
 afterEach("run deferred functions", async function () {

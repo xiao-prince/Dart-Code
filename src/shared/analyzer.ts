@@ -47,5 +47,6 @@ export abstract class Analyzer implements IAmDisposable {
 
 	public dispose(): void | Promise<void> {
 		this.disposables.forEach((d) => d.dispose());
+		this.disposables.length = 0;
 	}
 }

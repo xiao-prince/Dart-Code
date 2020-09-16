@@ -74,6 +74,9 @@ export abstract class StdIOService<T> implements IAmDisposable {
 	protected handleExit(code: number | null, signal: NodeJS.Signals | null) {
 		this.logTraffic(`Process terminated! ${code}, ${signal}`);
 		this.processExited = true;
+
+		// Dispose all listeners to avoid leaking.
+		// this.dispose();
 	}
 
 	protected handleError(error: Error) {
@@ -304,13 +307,7 @@ export abstract class StdIOService<T> implements IAmDisposable {
 		}
 		this.process = undefined;
 
-		this.disposables.forEach(async (d) => {
-			try {
-				return await d.dispose();
-			} catch (e) {
-				this.logger.error({ message: e.toString() });
-			}
-		});
+		this.disposables.forEach((d) => d.dispose());
 		this.disposables.length = 0;
 
 		// Clear log file so if any more log events come through later, we don't

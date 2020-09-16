@@ -5,7 +5,7 @@ import { DartCapabilities } from "../shared/capabilities/dart";
 import { DaemonCapabilities, FlutterCapabilities } from "../shared/capabilities/flutter";
 import { dartPlatformName, flutterExtensionIdentifier, HAS_LAST_DEBUG_CONFIG, HAS_LAST_TEST_DEBUG_CONFIG, isWin, IS_LSP_CONTEXT, IS_RUNNING_LOCALLY_CONTEXT, platformDisplayName, PUB_OUTDATED_SUPPORTED_CONTEXT } from "../shared/constants";
 import { WebClient } from "../shared/fetch";
-import { DartWorkspaceContext, FlutterWorkspaceContext, IFlutterDaemon, Logger, Sdks } from "../shared/interfaces";
+import { DartWorkspaceContext, FlutterWorkspaceContext, Logger, Sdks } from "../shared/interfaces";
 import { captureLogs, EmittingLogger, logToConsole, RingLog } from "../shared/logging";
 import { internalApiSymbol } from "../shared/symbols";
 import { uniq } from "../shared/utils";
@@ -49,7 +49,7 @@ export const SERVICE_EXTENSION_CONTEXT_PREFIX = "dart-code:serviceExtension.";
 export const SERVICE_CONTEXT_PREFIX = "dart-code:service.";
 
 let analyzer: Analyzer;
-let flutterDaemon: IFlutterDaemon;
+let flutterDaemon: FlutterDaemon;
 let deviceManager: FlutterDeviceManager;
 const dartCapabilities = DartCapabilities.empty;
 const flutterCapabilities = FlutterCapabilities.empty;
@@ -326,6 +326,12 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		recalculateAnalysisRoots();
 	}));
 
+	function shutdown() {
+		analyzer?.dispose();
+		flutterDaemon?.dispose();
+	}
+
+
 	return {
 		...new DartExtensionApi(),
 		[internalApiSymbol]: {
@@ -345,6 +351,7 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			nextAnalysis: () => analyzer.onNextAnalysisComplete,
 			pubGlobal,
 			safeToolSpawn,
+			shutdown,
 			webClient,
 			workspaceContext,
 		} as InternalExtensionApi,
@@ -494,7 +501,7 @@ export async function deactivate(isRestart: boolean = false): Promise<void> {
 		vs.commands.executeCommand("setContext", HAS_LAST_DEBUG_CONFIG, false);
 		vs.commands.executeCommand("setContext", HAS_LAST_TEST_DEBUG_CONFIG, false);
 		if (loggers) {
-			await Promise.all(loggers.map((logger) => logger.dispose()));
+			loggers.forEach((logger) => logger.dispose());
 			loggers.length = 0;
 		}
 	}

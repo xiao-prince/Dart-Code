@@ -6,7 +6,7 @@ import { DartCapabilities } from "../../shared/capabilities/dart";
 import { dartVMPath } from "../../shared/constants";
 import { LogCategory } from "../../shared/enums";
 import { DartSdks, Logger } from "../../shared/interfaces";
-import { nullLogger } from "../../shared/logging";
+import { CategoryLogger } from "../../shared/logging";
 import { PromiseCompleter, versionIsAtLeast } from "../../shared/utils";
 import { WorkspaceContext } from "../../shared/workspace";
 import { config } from "../config";
@@ -50,7 +50,7 @@ export class DasAnalyzer extends Analyzer {
 	public readonly fileTracker: DasFileTracker;
 
 	constructor(logger: Logger, sdks: DartSdks, dartCapabilities: DartCapabilities, wsContext: WorkspaceContext) {
-		super(nullLogger);
+		super(new CategoryLogger(logger, LogCategory.Analyzer));
 		this.client = new DasAnalyzerClient(this.logger, sdks, dartCapabilities);
 		this.fileTracker = new DasFileTracker(logger, this.client, wsContext);
 		this.disposables.push(this.client);

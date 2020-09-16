@@ -16,8 +16,11 @@ module.exports = {
 		});
 
 		const callCallback = (error: any, failures?: number) => {
+			// extApi.shutdown();
+
 			console.log(`Test run is complete! Calling VS Code callback with (${error}, ${failures})`);
 			cb(error, failures);
+
 
 			// This doesn't work either...
 			// process.stdin.end();
