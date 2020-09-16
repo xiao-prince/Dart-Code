@@ -224,18 +224,18 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			if (vs.workspace.workspaceFolders)
 				recalculateAnalysisRoots();
 
-			// Set up a handler to warn the user if they open a Dart file and we
-			// never set up the analyzer
-			let hasWarnedAboutLooseDartFiles = false;
-			const handleOpenFile = (d: vs.TextDocument) => {
-				if (!hasWarnedAboutLooseDartFiles && d.languageId === "dart" && d.uri.scheme === "file" && analysisRoots.length === 0) {
-					hasWarnedAboutLooseDartFiles = true;
-					vs.window.showWarningMessage("For full Dart language support, please open a folder containing your Dart files instead of individual loose files");
-				}
-			};
-			context.subscriptions.push(vs.workspace.onDidOpenTextDocument((d) => handleOpenFile(d)));
-			// Fire for editors already visible at the time this code runs.
-			vs.window.visibleTextEditors.forEach((e) => handleOpenFile(e.document));
+			// 	// Set up a handler to warn the user if they open a Dart file and we
+			// 	// never set up the analyzer
+			// 	let hasWarnedAboutLooseDartFiles = false;
+			// 	const handleOpenFile = (d: vs.TextDocument) => {
+			// 		if (!hasWarnedAboutLooseDartFiles && d.languageId === "dart" && d.uri.scheme === "file" && analysisRoots.length === 0) {
+			// 			hasWarnedAboutLooseDartFiles = true;
+			// 			vs.window.showWarningMessage("For full Dart language support, please open a folder containing your Dart files instead of individual loose files");
+			// 		}
+			// 	};
+			// 	context.subscriptions.push(vs.workspace.onDidOpenTextDocument((d) => handleOpenFile(d)));
+			// 	// Fire for editors already visible at the time this code runs.
+			// 	vs.window.visibleTextEditors.forEach((e) => handleOpenFile(e.document));
 		});
 
 		// Hook editor changes to send updated contents to analyzer.
