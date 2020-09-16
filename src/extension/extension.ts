@@ -38,7 +38,6 @@ import { config } from "./config";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
 import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
-import { DartCompletionItemProvider } from "./providers/dart_completion_item_provider";
 import { DartDiagnosticProvider } from "./providers/dart_diagnostic_provider";
 import { DartLanguageConfiguration } from "./providers/dart_language_configuration";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
@@ -186,8 +185,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// TODO: Do we need to push all these to subscriptions?!
 
 
-	const completionItemProvider = isUsingLsp || !dasClient ? undefined : new DartCompletionItemProvider(logger, dasClient);
-
 	const activeFileFilters: vs.DocumentFilter[] = [DART_MODE];
 
 	// Analyze Angular2 templates, requires the angular_analyzer_plugin.
@@ -206,8 +203,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	}
 
 	const triggerCharacters = ".(${'\"/\\".split("");
-	if (completionItemProvider)
-		context.subscriptions.push(vs.languages.registerCompletionItemProvider(activeFileFilters, completionItemProvider, ...triggerCharacters));
 
 	// Task handlers.
 	if (config.previewBuildRunnerTasks) {
@@ -398,7 +393,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			analyzer,
 			analyzerCapabilities: dasClient && dasClient.capabilities,
 			cancelAllAnalysisRequests: () => dasClient && dasClient.cancelAllRequests(),
-			completionItemProvider,
 			context: extContext,
 			currentAnalysis: () => analyzer.onCurrentAnalysisComplete,
 			daemonCapabilities: flutterDaemon ? flutterDaemon.capabilities : DaemonCapabilities.empty,
