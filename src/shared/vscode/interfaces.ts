@@ -30,10 +30,6 @@ export interface InternalExtensionApi {
 	cancelAllAnalysisRequests: () => void;
 	context: Context;
 	currentAnalysis: () => Promise<void>;
-	cursorIsInTest: boolean;
-	isInTestFileThatHasImplementation: boolean;
-	isInImplementationFileThatCanHaveTest: boolean;
-	isLsp: boolean;
 	dartCapabilities: {
 		generatesCodeWithUnimplementedError: boolean;
 		supportsDevTools: boolean;
@@ -47,8 +43,6 @@ export interface InternalExtensionApi {
 		webSupportsEvaluation: boolean;
 		webSupportsHotReload: boolean;
 	};
-	debugCommands: DebugCommandHandler;
-	debugSessions: Array<{ loadedServiceExtensions: VmServiceExtension[] }>;
 	envUtils: {
 		openInBrowser(url: string): Promise<boolean>;
 	};

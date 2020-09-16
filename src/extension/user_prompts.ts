@@ -7,11 +7,9 @@ import { WebClient } from "../shared/fetch";
 import { Logger, StagehandTemplate } from "../shared/interfaces";
 import { fsPath } from "../shared/utils/fs";
 import { checkHasFlutterExtension, extensionVersion, hasFlutterExtension, isDevExtension } from "../shared/vscode/extension_utils";
-import { showFlutterSurveyNotificationIfAppropriate } from "../shared/vscode/user_prompts";
 import { envUtils, getDartWorkspaceFolders } from "../shared/vscode/utils";
 import { Context } from "../shared/vscode/workspace";
 import { WorkspaceContext } from "../shared/workspace";
-import { markProjectCreationEnded, markProjectCreationStarted } from "./commands/sdk";
 import { promptToReloadExtension } from "./utils";
 
 export async function showUserPrompts(logger: Logger, context: Context, webClient: WebClient, workspaceContext: WorkspaceContext): Promise<void> {
@@ -75,10 +73,6 @@ export async function showUserPrompts(logger: Logger, context: Context, webClien
 		return;
 	}
 
-	if (workspaceContext.hasAnyFlutterProjects) {
-		if (await showFlutterSurveyNotificationIfAppropriate(context, webClient, envUtils.openInBrowser, Date.now(), logger))
-			return; // Bail if we showed it, so we won't show any other notifications.
-	}
 
 	if (!shouldSuppress(useRecommendedSettingsPromptKey)) {
 		showPrompt(useRecommendedSettingsPromptKey, promptToUseRecommendedSettings);
@@ -169,21 +163,17 @@ async function handleStagehandTrigger(logger: Logger, wf: vs.WorkspaceFolder, tr
 		}
 		fs.unlinkSync(triggerFile);
 		logger.info(`Creating Dart project for ${fsPath(wf.uri)}`, LogCategory.CommandProcesses);
-		try {
-			markProjectCreationStarted();
 
-			const success = await createDartProject(fsPath(wf.uri), template.name);
-			if (success) {
-				logger.info(`Fetching packages for newly-created project`, LogCategory.CommandProcesses);
-				await vs.commands.executeCommand("dart.getPackages", wf.uri);
-				handleDartWelcome(wf, template);
-				logger.info(`Finished creating new project!`, LogCategory.CommandProcesses);
-			} else {
-				logger.info(`Failed to create new project`, LogCategory.CommandProcesses);
-			}
-		} finally {
-			markProjectCreationEnded();
+		const success = await createDartProject(fsPath(wf.uri), template.name);
+		if (success) {
+			logger.info(`Fetching packages for newly-created project`, LogCategory.CommandProcesses);
+			await vs.commands.executeCommand("dart.getPackages", wf.uri);
+			handleDartWelcome(wf, template);
+			logger.info(`Finished creating new project!`, LogCategory.CommandProcesses);
+		} else {
+			logger.info(`Failed to create new project`, LogCategory.CommandProcesses);
 		}
+
 	}
 }
 
@@ -193,14 +183,10 @@ async function handleFlutterCreateTrigger(wf: vs.WorkspaceFolder): Promise<void>
 		let sampleID: string | undefined = fs.readFileSync(flutterTriggerFile).toString().trim();
 		sampleID = sampleID ? sampleID : undefined;
 		fs.unlinkSync(flutterTriggerFile);
-		try {
-			markProjectCreationStarted();
-			const success = await createFlutterProject(fsPath(wf.uri), sampleID);
-			if (success)
-				handleFlutterWelcome(wf, sampleID);
-		} finally {
-			markProjectCreationEnded();
-		}
+		const success = await createFlutterProject(fsPath(wf.uri), sampleID);
+		if (success)
+			handleFlutterWelcome(wf, sampleID);
+
 	}
 }
 

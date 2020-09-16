@@ -22,19 +22,9 @@ import { DasAnalyzer } from "./analysis/analyzer_das";
 import { AnalyzerStatusReporter } from "./analysis/analyzer_status_reporter";
 import { FileChangeHandler } from "./analysis/file_change_handler";
 import { DartExtensionApi } from "./api";
-import { DebugCommands, debugSessions } from "./commands/debug";
-import { EditCommands } from "./commands/edit";
-import { DasEditCommands } from "./commands/edit_das";
-import { LoggingCommands } from "./commands/logging";
-import { OpenInOtherEditorCommands } from "./commands/open_in_other_editors";
-import { RefactorCommands } from "./commands/refactor";
-import { SdkCommands } from "./commands/sdk";
-import { cursorIsInTest, DasTestCommands, isInImplementationFileThatCanHaveTest, isInTestFileThatHasImplementation } from "./commands/test";
-import { TypeHierarchyCommand } from "./commands/type_hierarchy";
 import { config } from "./config";
 import { setUpDaemonMessageHandler } from "./flutter/daemon_message_handler";
 import { FlutterDaemon } from "./flutter/flutter_daemon";
-import { HotReloadOnSaveHandler } from "./flutter/hot_reload_save_handler";
 import { PubBuildRunnerTaskProvider } from "./pub/build_runner_task_provider";
 import { PubGlobal } from "./pub/global";
 import { StatusBarVersionTracker } from "./sdk/status_bar_version_tracker";
@@ -262,8 +252,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		const connectedSetup = dasClient.registerForServerConnected(async (sc) => {
 			connectedSetup.dispose();
 
-			context.subscriptions.push(new RefactorCommands(logger, context, dasClient));
-
 			// Set up completions for unimported items.
 			if (dasClient.capabilities.supportsAvailableSuggestions && config.autoImportCompletions) {
 				await dasClient.completionSetSubscriptions({
@@ -276,28 +264,10 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Handle config changes so we can reanalyze if necessary.
 	context.subscriptions.push(vs.workspace.onDidChangeConfiguration(() => handleConfigurationChange(sdks)));
 
-	// Register additional commands.
-	const sdkCommands = new SdkCommands(logger, context, workspaceContext, sdkUtils, pubGlobal, flutterCapabilities, deviceManager);
-	const debugCommands = new DebugCommands(logger, extContext, workspaceContext, pubGlobal);
 
-	// Wire up handling of Hot Reload on Save.
-	context.subscriptions.push(new HotReloadOnSaveHandler(debugCommands, flutterCapabilities));
 
 	// Register URI handler.
 	context.subscriptions.push(vs.window.registerUriHandler(new DartUriHandler(flutterCapabilities)));
-
-	context.subscriptions.push(new LoggingCommands(logger, context.logPath));
-	context.subscriptions.push(new OpenInOtherEditorCommands(logger, sdks));
-	if (dasAnalyzer)
-		context.subscriptions.push(new DasTestCommands(logger, workspaceContext, dasAnalyzer.fileTracker));
-
-
-	// Set up commands for Dart editors.
-	context.subscriptions.push(new EditCommands());
-	if (dasClient && dasAnalyzer) {
-		context.subscriptions.push(new DasEditCommands(logger, context, dasClient));
-		context.subscriptions.push(new TypeHierarchyCommand(logger, dasClient));
-	}
 
 
 	context.subscriptions.push(vs.commands.registerCommand("dart.package.openFile", (filePath) => {
@@ -324,17 +294,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 	// Turn on all the commands.
 	setCommandVisiblity(true, workspaceContext);
 	vs.commands.executeCommand("setContext", DART_PLATFORM_NAME, dartPlatformName);
-
-	// Prompt for pub get if required
-	function checkForPackages() {
-		// Don't prompt for package updates in the Fuchsia tree/Dart SDK repo.
-		if (workspaceContext.config.disableAutomaticPackageGet)
-			return;
-		// tslint:disable-next-line: no-floating-promises
-		sdkCommands.fetchPackagesOrPrompt(undefined, { alwaysPrompt: true });
-	}
-	if (!isRestart)
-		checkForPackages();
 
 	// Begin activating dependant packages.
 	if (workspaceContext.shouldLoadFlutterExtension) {
@@ -369,7 +328,6 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 		}
 
 		recalculateAnalysisRoots();
-		checkForPackages();
 	}));
 
 	return {
@@ -382,17 +340,11 @@ export async function activate(context: vs.ExtensionContext, isRestart: boolean 
 			currentAnalysis: () => analyzer.onCurrentAnalysisComplete,
 			daemonCapabilities: flutterDaemon ? flutterDaemon.capabilities : DaemonCapabilities.empty,
 			dartCapabilities,
-			debugCommands,
-			debugSessions,
 			envUtils,
 			fileTracker: dasAnalyzer.fileTracker,
 			flutterCapabilities,
-			get cursorIsInTest() { return cursorIsInTest; },
-			get isInImplementationFileThatCanHaveTest() { return isInImplementationFileThatCanHaveTest; },
-			get isInTestFileThatHasImplementation() { return isInTestFileThatHasImplementation; },
 			getLogHeader,
 			initialAnalysis: analyzer.onInitialAnalysis,
-			isLsp: isUsingLsp,
 			logger,
 			nextAnalysis: () => analyzer.onNextAnalysisComplete,
 			pubGlobal,
