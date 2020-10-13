@@ -1,4 +1,4 @@
-//@ts-check
+// @ts-check
 
 "use strict";
 
@@ -17,9 +17,10 @@
 // It appears to be safe to ignore these as they're being loaded in a try{} block
 // and are optional.
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = require("path");
 
-module.exports = env => {
+module.exports = (env) => {
 	/**
 	 * @type {import("webpack").Configuration}
 	 */
@@ -27,6 +28,7 @@ module.exports = env => {
 		devtool: "source-map",
 		entry: {
 			extension: "./src/extension/extension.ts",
+			debug: "./src/debug/debug_entry.ts",
 		},
 		// https://webpack.js.org/configuration/externals/
 		externals: {
@@ -49,6 +51,15 @@ module.exports = env => {
 		},
 		target: "node",
 	};
+
+	if (env && env.instrumentation) {
+		config.module.rules.push({
+			enforce: "post",
+			exclude: /node_modules/,
+			test: /\.ts$/,
+			loader: "istanbul-instrumenter-loader",
+		});
+	}
 
 	return config;
 };
