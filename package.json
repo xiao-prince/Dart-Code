@@ -2,10 +2,10 @@
 	"name": "dart-code",
 	"displayName": "Dart",
 	"description": "Dart language support and debugger for Visual Studio Code.",
-	"version": "3.15.0-dev",
+	"version": "3.16.0-dev",
 	"publisher": "Dart-Code",
 	"engines": {
-		"vscode": "^1.47.0"
+		"vscode": "^1.49.0"
 	},
 	"extensionKind": [
 		"workspace"
@@ -2000,16 +2000,26 @@
 		]
 	},
 	"scripts": {
+		"ensure-icon-submodule": "if [ ! -f media/doc-icons/material/ac_unit@2x.png ]; then exit 999; fi",
+		"vscode:prepublish": "npm run ensure-icon-submodule && webpack --mode production",
 		"build": "webpack --mode development",
+		"build-with-instrumentation": "webpack --env.instrumentation --mode development",
 		"watch": "webpack --mode development --watch --info-verbosity verbose",
-		"build-tests": "tsc -p ./",
-		"watch-non-ext": "tsc -p ./ --watch --extendedDiagnostics",
-		"test": "npm run build && npm run build-tests && npm run test-only",
-		"test-only": "node ./out/src/test/test_all.js"
+		"build-tests": "tsc -p ./tsconfig.build.json",
+		"watch-non-ext": "tsc -p ./tsconfig.build.json --watch --extendedDiagnostics",
+		"lint": "eslint -c .eslintrc.js --ext .ts .",
+		"test": "npm run build-with-instrumentation && npm run build-tests && npm run instrument && npm run test-only && npm run report_lcov && npm run report_screen",
+		"instrument": "cd out/src && nyc instrument --compact false --in-place . . && cd ../..",
+		"test-only": "node ./out/src/test/test_all.js",
+		"report_lcov": "nyc report -r lcovonly --report-dir coverage/$BOT",
+		"report_screen": "nyc report"
 	},
 	"dependencies": {
 		"minimatch": "^3.0.4",
 		"semver": "^7.3.2",
+		"vscode-debugadapter": "^1.42.1",
+		"vscode-debugprotocol": "^1.42.0",
+		"vscode-languageclient": "^6.1.3",
 		"ws": "^7.3.1"
 	},
 	"devDependencies": {
@@ -2018,13 +2028,23 @@
 		"@types/mocha": "^8.0.3",
 		"@types/node": "^12.12.58",
 		"@types/semver": "^7.3.3",
-		"@types/vscode": "^1.47.0",
+		"@types/sinon": "5.0.5",
+		"@types/vscode": "^1.49.0",
 		"@types/ws": "^7.2.6",
+		"@typescript-eslint/eslint-plugin": "^4.2.0",
+		"@typescript-eslint/eslint-plugin-tslint": "^4.2.0",
+		"@typescript-eslint/parser": "^4.2.0",
+		"eslint": "^6.8.0",
 		"glob": "^7.1.6",
+		"istanbul-instrumenter-loader": "^3.0.1",
 		"mocha": "^8.1.3",
+		"nyc": "^15.1.0",
+		"sinon": "^7.5.0",
+		"source-map-support": "^0.5.19",
 		"ts-loader": "^8.0.3",
 		"tslint": "^6.1.3",
 		"typescript": "^4.0.2",
+		"vscode-debugadapter-testsupport": "^1.42.0",
 		"vscode-test": "^1.4.0",
 		"webpack": "^4.44.1",
 		"webpack-cli": "^3.3.12"
