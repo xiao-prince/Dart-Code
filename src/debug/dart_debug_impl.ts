@@ -28,7 +28,7 @@ const maxValuesToCallToString = 100;
 // which we'd prefer not to show to the user.
 const unoptimizedPrefix = "[Unoptimized] ";
 const trailingSemicolonPattern = new RegExp(`;\\s*$`, "m");
-const logDapTraffic = false;
+const logDapTraffic = true;
 
 // TODO: supportsSetVariable
 // TODO: class variables?

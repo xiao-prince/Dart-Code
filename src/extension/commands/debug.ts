@@ -490,9 +490,17 @@ export class DebugCommands {
 		} else if (e.event === "dart.exposeUrl") {
 			const originalUrl = e.body.url as string;
 			try {
+				this.logger.info(`Exposing URL!`);
 				const exposedUrl = await envUtils.exposeUrl(vs.Uri.parse(originalUrl, true), this.logger);
+				this.logger.info(`Done exposing URL, sending custom request!`);
 				// HACK: Convert %24 back to $
-				session.session.customRequest("exposeUrlResponse", { originalUrl, exposedUrl });
+				session.session.customRequest("exposeUrlResponse", { originalUrl, exposedUrl }).then(
+					(_) => {
+						this.logger.info("exposeUrlResponse completed!");
+					}, (e) => {
+						this.logger.info(`exposeUrlResponse failed! ${e}`);
+					},
+				);
 			} catch (e) {
 				this.logger.error(`Failed to expose URL ${originalUrl}: ${e}`);
 				session.session.customRequest("exposeUrlResponse", { originalUrl, exposedUrl: originalUrl });
