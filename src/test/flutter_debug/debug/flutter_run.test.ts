@@ -1153,7 +1153,7 @@ describe(`flutter run debugger (launch on ${flutterTestDeviceId})`, () => {
 		);
 	});
 
-	it("does not stop on exception in noDebug mode", async () => {
+	it.only("does not stop on exception in noDebug mode", async () => {
 		await openFile(flutterHelloWorldBrokenFile);
 		const config = await startDebugger(dc, flutterHelloWorldBrokenFile);
 		config.noDebug = true;
